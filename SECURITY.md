@@ -1,5 +1,8 @@
 # Política de Segurança
 
+> **Aviso de segurança (15/10/2026):** a chave privada de assinatura do APK e as senhas de release foram versionadas publicamente. Trate o material antigo como comprometido e não o reutilize. A assinatura de release está temporariamente desativada; não instale nem redistribua a versão v2.1.0. A remoção dos arquivos da árvore atual não apaga cópias no histórico Git, em forks, clones ou caches. A release publicada no GitHub ainda precisa ser retirada manualmente. Consulte o [aviso de retirada](dist/README.md) antes de distribuir qualquer artefato.
+
+
 A segurança do **CardControl** é baseada em três pilares fundamentais:
 1. **Modelo 100% Offline-First:** Ausência de servidores remotos, telemetria ou envio de dados financeiros para nuvem.
 2. **Criptografia de Hardware:** Cifras `AES256-GCM` gerenciadas diretamente pelo Android Keystore.
