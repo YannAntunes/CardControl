@@ -57,6 +57,41 @@ apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
 
 ---
 
+## 📦 Download do Aplicativo (dist/)
+
+Para instalar diretamente no seu celular sem precisar compilar o código-fonte:
+- Baixe o binário assinado oficial em: **[`dist/CardControl-v2.1.0-release.apk`](dist/CardControl-v2.1.0-release.apk)**.
+- Consulte a tabela de hashes e integridade em [`dist/README.md`](dist/README.md).
+- Siga o guia passo a passo em [`docs/guides/CONFIGURACAO_E_PERMISSOES.md`](docs/guides/CONFIGURACAO_E_PERMISSOES.md) para liberar o leitor de notificações no Android 13/14+.
+
+---
+
+## 📁 Estrutura do Repositório
+
+```text
+├── .agent/              # Estado atual, grafo de tarefas e planos executáveis
+├── .github/             # Pipelines de integração contínua (GitHub Actions CI)
+├── app/                 # Módulo principal do app Android (Compose + Room)
+│   ├── src/main/        # Código Kotlin, Manifesto e Recursos vetoriais
+│   └── src/test/        # Harness de segurança e testes de domínio
+├── dist/                # Distribuições oficiais de release (.apk e checksums)
+├── docs/                # Documentação técnica e governança
+│   ├── architecture/    # Arquitetura offline-first e persistência local
+│   ├── goals/           # Histórico de metas de engenharia
+│   ├── guides/          # Manuais práticos de uso e permissões do Android
+│   ├── reference/       # Documentações de referência e histórico
+│   └── security/        # Modelo de ameaças e defesas criptográficas
+├── gradle/              # Wrapper oficial e configurações de compilação
+├── scripts/             # Scripts de empacotamento e utilitários de suporte
+├── AGENTS.md            # Instruções de precedência e governança para agentes
+├── CONTRIBUTING.md      # Convenções de commit e regras de contribuição
+├── LICENSE              # Licença MIT
+├── README.md            # Este documento
+└── SECURITY.md          # Política de segurança e reporte responsável
+```
+
+---
+
 ## 📋 Governança e Regras de Engenharia
 
 O projeto adota diretrizes estritas de desenvolvimento e automação para agentes e mantenedores humanos:
