@@ -4,7 +4,6 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.cardcontrol.app.data.local.AppDatabase
-import com.cardcontrol.app.data.repository.CardRepository
 import com.cardcontrol.app.data.security.CredentialStore
 import com.cardcontrol.app.util.ReportEngine
 import kotlinx.coroutines.CoroutineScope
@@ -19,44 +18,26 @@ class BankNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
         val pkg = sbn.packageName ?: return
-        if (pkg !in BankNotificationParser.SUPPORTED_PACKAGES) return
+        if (!BankNotificationParser.isSupportedPackage(pkg)) return
 
         val notification = sbn.notification ?: return
         if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
         if (sbn.isOngoing) return
 
         val extras = notification.extras ?: return
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-            ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
-
-        val parsed = BankNotificationParser.parse(pkg, title, text, sbn.postTime) ?: return
+            ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString()
+        val postTime = sbn.postTime
 
         serviceScope.launch {
-            val db = AppDatabase.getInstance(applicationContext)
-            val dao = db.appDao()
-            val repo = CardRepository(dao)
+            val dao = AppDatabase.getInstance(applicationContext).appDao()
+            val result = BankNotificationProcessor(dao).process(pkg, title, text, postTime)
+            if (result !is AutoCaptureResult.Registered) return@launch
 
-            if (repo.isDuplicateNotification(parsed.dedupHash, sbn.postTime)) return@launch
-
-            val matchedCard = parsed.lastFourDigits?.let { dao.getCardByLastFour(it) }
-                ?: dao.getFirstCard()
-                ?: return@launch
-
-            val holderId = matchedCard.defaultHolderId ?: return@launch
-            val holder = dao.getHolderById(holderId) ?: return@launch
-
-            repo.registerExpense(
-                cardId = matchedCard.id,
-                holderId = holder.id,
-                merchant = parsed.merchant,
-                totalAmount = parsed.amount,
-                installmentsCount = parsed.installments,
-                purchaseTimestamp = sbn.postTime,
-                isAutoCaptured = true,
-                dedupHash = parsed.dedupHash
-            )
-
+            val holder = result.holder
+            val card = result.card
+            val expense = result.expense
             if (holder.notifyByEmailOnPurchase && holder.email.isNotBlank()) {
                 val creds = CredentialStore(applicationContext)
                 if (creds.isConfigured()) {
@@ -70,10 +51,10 @@ class BankNotificationListener : NotificationListenerService() {
                         appPassword = creds.getAppPassword(),
                         recipientEmail = holder.email,
                         holderName = holder.name,
-                        cardName = "${matchedCard.name} (Final ${matchedCard.lastFourDigits})",
-                        merchant = parsed.merchant,
-                        amount = parsed.amount,
-                        installments = parsed.installments,
+                        cardName = "${card.name} (Final ${card.lastFourDigits})",
+                        merchant = expense.merchant,
+                        amount = expense.amount,
+                        installments = expense.installments,
                         remainingSubLimit = remainingSubLimit
                     )
                 }

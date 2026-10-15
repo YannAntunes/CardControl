@@ -33,6 +33,9 @@ interface AppDao {
     @Query("SELECT * FROM credit_cards LIMIT 1")
     suspend fun getFirstCard(): CreditCardEntity?
 
+    @Query("SELECT COUNT(*) FROM credit_cards")
+    suspend fun countCards(): Int
+
     @Insert
     suspend fun insertTransaction(tx: TransactionEntity): Long
 
