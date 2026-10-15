@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CardControl</string>
+    <string name="notification_service_name">Leitor Automático de Cartões</string>
+    <string name="notification_service_desc">Lê de forma 100% offline notificações de compras no crédito emitidas por bancos para organização e controle das faturas e sublimites.</string>
+</resources>

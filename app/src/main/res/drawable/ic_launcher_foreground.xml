@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Cartão Principal com bordas arredondadas -->
+    <path
+        android:fillColor="#0D192E"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2.5"
+        android:strokeLineJoin="round"
+        android:pathData="M32,38 h44 c3.31,0 6,2.69 6,6 v26 c0,3.31 -2.69,6 -6,6 h-44 c-3.31,0 -6,-2.69 -6,-6 v-26 c0,-3.31 2.69,-6 6,-6 z" />
+
+    <!-- Tarja magnética / Detalhe de topo -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M26,45 h56 v4 h-56 z" />
+
+    <!-- Chip EMV inteligente dourado/ciano -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M33,54 h8 c0.55,0 1,0.45 1,1 v6 c0,0.55 -0.45,1 -1,1 h-8 c-0.55,0 -1,-0.45 -1,-1 v-6 c0,-0.55 0.45,-1 1,-1 z" />
+
+    <!-- Linhas de circuito do chip -->
+    <path
+        android:strokeColor="#070A12"
+        android:strokeWidth="0.8"
+        android:pathData="M37,54 v8 M32,58 h10" />
+
+    <!-- Ondas de aproximação (Contactless NFC) -->
+    <path
+        android:strokeColor="#34D399"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M48,56 a4,4 0 0,1 0,6 M52,53 a8,8 0 0,1 0,12" />
+
+    <!-- Escudo de segurança no canto inferior direito -->
+    <path
+        android:fillColor="#6366F1"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="1.2"
+        android:pathData="M67,58 l6,-2.5 l6,2.5 v4 c0,4 -2.5,7 -6,9 c-3.5,-2 -6,-5 -6,-9 z" />
+
+    <!-- Checkmark dentro do escudo -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M70,64 l2,2 l4,-4" />
+
+</vector>

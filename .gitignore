@@ -1,0 +1,26 @@
+# Android / Gradle
+.gradle/
+build/
+app/build/
+**/build/
+*.iml
+.idea/
+local.properties
+.cxx/
+captures/
+.externalNativeBuild/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+*~
+
+# Logs and debug
+*.log
+hs_err_pid*
+replay_pid*
+
+# Binary builds (generated locally)
+CardControl.apk

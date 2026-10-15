@@ -1,0 +1,60 @@
+version: "2.1.0"
+project: "CardControl"
+engine: "Android Native (Kotlin + Compose + Room)"
+
+tasks:
+  - id: "TASK-001"
+    title: "Implementação da fundação offline-first e Room SQLite"
+    status: "COMPLETED"
+    owner: "Core Data"
+    verification: "Room KSP compilation and AppDatabase entities test"
+
+  - id: "TASK-002"
+    title: "Motor de parsing de notificações bancárias e deduplicação SHA-256"
+    status: "COMPLETED"
+    owner: "Service Engine"
+    verification: "SecurityAndDomainTestHarness assertions"
+
+  - id: "TASK-003"
+    title: "Proteção contra CRLF injection, Path Traversal e ReDoS"
+    status: "COMPLETED"
+    owner: "Security"
+    verification: "SecuritySanitizer tests PASS"
+
+  - id: "TASK-004"
+    title: "Design System Liquid Glass e telas nativas em Jetpack Compose"
+    status: "COMPLETED"
+    owner: "UI/UX"
+    verification: "UI rendering, dark palette Obsidian/DeepSlate, ambient glow"
+
+  - id: "TASK-005"
+    title: "Identidade visual oficial e Adaptive Icons Android"
+    status: "COMPLETED"
+    owner: "Branding/System"
+    verification: "ic_launcher foreground, background e adaptive-icon v26"
+
+  - id: "TASK-006"
+    title: "Keystore de assinatura dedicado e builds v1/v2 com apksigner"
+    status: "COMPLETED"
+    owner: "DevOps/Release"
+    verification: "apksigner verify with CN=CardControl certificate"
+
+  - id: "TASK-007"
+    title: "Aprimoramento de formulários, teclados numéricos e suporte a senha"
+    status: "COMPLETED"
+    owner: "UI/UX"
+    verification: "GlassTextField with KeyboardType.Number, Decimal, Phone, Email"
+
+  - id: "TASK-008"
+    title: "Detecção e conciliação automática de Pix recebido para abatimento"
+    status: "PENDING"
+    owner: "Service Engine"
+    dependencies: ["TASK-002"]
+    verification: "Unit tests simulating incoming Pix push notifications"
+
+  - id: "TASK-009"
+    title: "Backup e exportação local do banco de dados SQLite (JSON/CSV)"
+    status: "PENDING"
+    owner: "Core Data"
+    dependencies: ["TASK-001"]
+    verification: "Deterministic export and import verification test"
