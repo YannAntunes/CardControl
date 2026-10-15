@@ -25,25 +25,12 @@ android {
         }
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("release.keystore")
-            storePassword = "cardcontrol_secret"
-            keyAlias = "cardcontrol"
-            keyPassword = "cardcontrol_secret"
-            enableV1Signing = true
-            enableV2Signing = true
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            // Release signing remains disabled until the exposed key is rotated safely.
         }
-        debug {
-            signingConfig = signingConfigs.getByName("release")
-        }
+        // Debug uses Android's generated debug key; never use production signing material here.
     }
 
     compileOptions {
@@ -69,9 +56,9 @@ dependencies {
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
 
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("com.sun.mail:android-mail:1.6.7")
-    implementation("com.sun.mail:android-activation:1.6.7")
+    implementation("androidx.security:security-crypto:1.1.0")
+    implementation("com.sun.mail:android-mail:1.6.8")
+    implementation("com.sun.mail:android-activation:1.6.8")
 
     testImplementation("junit:junit:4.13.2")
 }

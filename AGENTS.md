@@ -24,7 +24,7 @@ Se houver divergência técnica, prevalece o código verificado no repositório 
 - **Precisão Financeira:** Divisão de parcelas com `BigDecimal` (`RoundingMode.DOWN`), garantindo soma exata de centavos ao concentrar o resto na 1ª parcela (`splitInstallmentAmounts`).
 - **Deduplicação Inteligente:** Hash SHA-256 do pacote, valor, estabelecimento, final do cartão e janela temporal de 2 minutos para descarte de notificações duplicadas emitidas pelo banco.
 - **Identidade Visual:** Design System **Liquid Glass** com paleta Obsidian/DeepSlate, brilhos ciano/indigo/esmeralda, Adaptive Icons oficiais e formulários inteligentes com teclados especializados (numérico, decimal, telefone e e-mail).
-- **Assinatura e Empacotamento:** Keystore de release dedicado (`release.keystore`, RSA 2048-bit) configurado no Gradle com esquema APK Signature Scheme v2 para permitir atualizações diretas no Android sem perda de dados.
+- **Assinatura e Empacotamento:** A chave de release e as senhas anteriormente versionadas devem ser consideradas comprometidas. O build `debug` usa a chave padrão do Android. A assinatura de release está temporariamente desativada até haver uma nova chave e um plano de atualização compatível com instalações existentes. Não publique artefatos de release enquanto esse bloqueio estiver ativo.
 
 ---
 
@@ -56,11 +56,14 @@ Nenhuma funcionalidade pode ser declarada concluída sem validação com comando
   ```
   Todas as asserções da suíte `SecurityAndDomainTestHarness` devem passar com zero falhas e zero erros.
 
-- **Compilação e Assinatura do APK:**
+- **Compilação de Debug:**
   ```powershell
-  $env:JAVA_HOME="C:\Program Files\Java\jdk-17"; .\gradlew.bat assembleRelease --console=plain --max-workers=2 "-Pkotlin.compiler.execution.strategy=in-process"
+  $env:JAVA_HOME="C:\Program Files\Java\jdk-17"; .\gradlew.bat assembleDebug --console=plain --max-workers=2 "-Pkotlin.compiler.execution.strategy=in-process"
   ```
-  O binário deve ser gerado em `app/build/outputs/apk/release/app-release.apk` e verificado via `apksigner verify`.
+  O artefato de debug usa a chave de desenvolvimento padrão do Android e não deve depender do material de assinatura de release.
+
+- **Assinatura de Release:**
+  `assembleRelease` não é critério de release até que a nova chave seja configurada fora do Git e o caminho de atualização das instalações existentes seja validado. O workflow de tags deve permanecer bloqueado até essa configuração.
 
 - **Proibição de Alucinação:**
   - Nunca declare pronto algo que não foi executado de verdade no terminal.
