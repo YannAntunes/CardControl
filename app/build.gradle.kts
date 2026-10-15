@@ -25,25 +25,12 @@ android {
         }
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("release.keystore")
-            storePassword = "cardcontrol_secret"
-            keyAlias = "cardcontrol"
-            keyPassword = "cardcontrol_secret"
-            enableV1Signing = true
-            enableV2Signing = true
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            // Release signing remains disabled until the exposed key is rotated safely.
         }
-        debug {
-            signingConfig = signingConfigs.getByName("release")
-        }
+        // Debug uses Android's generated debug key; never use production signing material here.
     }
 
     compileOptions {
