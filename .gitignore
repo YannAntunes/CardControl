@@ -10,6 +10,18 @@ local.properties
 captures/
 .externalNativeBuild/
 
+# Signing material and credentials must stay outside version control
+*.keystore
+*.jks
+keystore.properties
+key.properties
+secrets.properties
+
+# Distribution binaries are published through GitHub Releases
+*.apk
+*.aab
+dist/
+
 # OS and IDE files
 .DS_Store
 Thumbs.db
@@ -21,6 +33,3 @@ Thumbs.db
 *.log
 hs_err_pid*
 replay_pid*
-
-# Binary builds (generated locally)
-CardControl.apk
