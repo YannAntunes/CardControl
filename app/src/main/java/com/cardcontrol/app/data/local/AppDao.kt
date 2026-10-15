@@ -24,14 +24,11 @@ interface AppDao {
     @Query("SELECT * FROM credit_cards ORDER BY name ASC")
     fun observeCards(): Flow<List<CreditCardEntity>>
 
-    @Query("SELECT * FROM credit_cards WHERE lastFourDigits = :lastFour LIMIT 1")
-    suspend fun getCardByLastFour(lastFour: String): CreditCardEntity?
+    @Query("SELECT * FROM credit_cards ORDER BY id ASC")
+    suspend fun getAllCardsSnapshot(): List<CreditCardEntity>
 
     @Query("SELECT * FROM credit_cards WHERE id = :id LIMIT 1")
     suspend fun getCardById(id: Long): CreditCardEntity?
-
-    @Query("SELECT * FROM credit_cards LIMIT 1")
-    suspend fun getFirstCard(): CreditCardEntity?
 
     @Insert
     suspend fun insertTransaction(tx: TransactionEntity): Long
@@ -67,9 +64,9 @@ interface AppDao {
     @Query("SELECT * FROM payments")
     fun observeAllPayments(): Flow<List<PaymentEntity>>
 
-    @Query("SELECT COALESCE(SUM(amount), 0.0) FROM installments WHERE holderId = :holderId")
-    suspend fun getTotalHistoricalSpentByHolder(holderId: Long): Double
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM installments WHERE holderId = :holderId")
+    suspend fun getTotalHistoricalSpentByHolder(holderId: Long): Long
 
-    @Query("SELECT COALESCE(SUM(amountPaid), 0.0) FROM payments WHERE holderId = :holderId")
-    suspend fun getTotalHistoricalPaidByHolder(holderId: Long): Double
+    @Query("SELECT COALESCE(SUM(amountPaid), 0) FROM payments WHERE holderId = :holderId")
+    suspend fun getTotalHistoricalPaidByHolder(holderId: Long): Long
 }

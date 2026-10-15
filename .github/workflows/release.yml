@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -110,7 +110,7 @@ jobs:
           )
 
       - name: Create draft GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: "CardControl ${{ github.ref_name }}"
           draft: true
@@ -122,6 +122,16 @@ jobs:
 
             Before publishing, review the generated APK and verify the SHA-256 checksum in `SHA256SUMS.txt`.
             This workflow requires a rotated signing key stored in repository secrets. Do not publish if signing or migration validation has not been completed.
+
+            ### 🌟 Destaques desta Versão:
+            - **Motor de Notificações:** Suporte a Nubank, Inter, Itaú, C6, Santander, Bradesco, Caixa, PicPay e Mercado Pago com anti-duplicação SHA-256 e resolução segura.
+            - **Design System Liquid Glass:** Interface escura fluida (Obsidian/DeepSlate) com Adaptive Icons e teclados especializados (numérico, decimal, telefone e e-mail).
+            - **Precisão Contábil Canônica:** Manipulação 100% inteira em centavos (`Long`) sem erros de ponto flutuante e cálculo automático de corte de faturas (`closingDay`).
+            - **Segurança Reforçada:** Criptografia no chip de hardware via Android Keystore (`AES256-GCM`), bloqueio de backup e sanitização rigorosa de entradas.
+            - **Distribuição Direta:** Assinatura dedicada v2 (`CN=CardControl`) permitindo atualizações diretas no Android sem perda de dados.
+
+            ### 🔒 Verificação de Integridade
+            - Verifique o hash SHA-256 no arquivo anexo `SHA256SUMS.txt` ou com `apksigner verify`.
           files: |
             ${{ runner.temp }}/release-assets/CardControl-${{ github.ref_name }}.apk
             ${{ runner.temp }}/release-assets/SHA256SUMS.txt
