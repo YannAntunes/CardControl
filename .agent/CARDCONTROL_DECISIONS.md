@@ -29,6 +29,7 @@
 ---
 
 ## ADR-005: Certificado de Assinatura Local Próprio (Keystore Dedicado)
-- **Status:** Aceito
-- **Contexto:** Builds `debug` usam chaves transitórias que acionam avisos agressivos de segurança no Android e quebram a compatibilidade de atualização em sideload.
-- **Decisão:** Criar um `release.keystore` de 2048-bit com validade de 25 anos em nome de `CN=CardControl`, fixando o esquema APK Signature Scheme v2 para permitir atualizações diretas no Android sem perda do banco SQLite.
+- **Status:** Suspenso por incidente de segurança (15/10/2026)
+- **Contexto:** O keystore de release e as senhas associadas foram versionados em um repositório público. O material deve ser tratado como comprometido.
+- **Decisão anterior:** Um keystore dedicado era usado para assinar APKs distribuídos diretamente e permitir atualizações com a mesma assinatura.
+- **Decisão atual:** Não reutilizar a chave nem as senhas expostas. A assinatura de release está desativada até que o caminho de atualização das instalações existentes seja avaliado, uma nova chave seja gerada e a assinatura passe a usar configuração externa ao Git. Uma nova chave pode impedir a atualização direta de instalações assinadas com a chave anterior; não publicar uma versão até validar a estratégia de migração.
