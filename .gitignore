@@ -24,3 +24,14 @@ replay_pid*
 
 # Binary builds (generated locally)
 CardControl.apk
+
+# Keystores e credenciais de assinatura (Segurança)
+*.jks
+*.keystore
+app/release.keystore
+keystore.properties
+
+# Binários e artefatos de distribuição (devem ficar apenas no GitHub Releases)
+dist/
+*.apk
+*.aab
