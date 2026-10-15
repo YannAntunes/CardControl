@@ -1,34 +1,16 @@
-# Distribuições Oficiais do CardControl (dist/)
+# Aviso de segurança: distribuição v2.1.0 retirada
 
-Este diretório contém os binários de release compilados, assinados e prontos para distribuição direta (sideload) em aparelhos Android.
+**Não instale nem redistribua o APK v2.1.0 deste repositório ou da página de Releases.**
 
----
+Em 15/10/2026, foi identificado que a chave privada de assinatura e as senhas de release estavam versionadas publicamente. O APK v2.1.0 foi assinado com esse material e deve ser tratado como potencialmente comprometido.
 
-## 📦 Versão Atual: v2.1.0 (versionCode 3)
+O arquivo APK e o checksum correspondente foram removidos da árvore atual do Git. A assinatura de novos releases permanece desativada enquanto a equipe define uma estratégia segura para a rotação da chave e a atualização das instalações existentes.
 
-| Arquivo | Tamanho | SHA-256 Checksum |
-| :--- | :--- | :--- |
-| `CardControl-v2.1.0-release.apk` | ~11.3 MB | `B2CB30F1FEDA58BAFA50EFDB655182F6075A68B9767E790A82BB508FD80F90E6` |
+A remoção do arquivo deste repositório não retira cópias de releases já publicados, clones, forks, caches ou commits antigos. A release v2.1.0 ainda precisa ser retirada manualmente da página Releases do GitHub.
 
----
+## Próximos passos antes de voltar a distribuir
 
-## 🔒 Certificado de Assinatura Oficial
-
-O aplicativo é assinado com certificado RSA de 2048-bit proprietário e permanente do projeto:
-- **Distinguished Name (DN):** `CN=CardControl, OU=Security, O=CardControl Offline, L=Sao Paulo, ST=SP, C=BR`
-- **Esquema de Assinatura:** APK Signature Scheme v2 (suportado a partir do Android 7.0+)
-- **Fingerprint SHA-256:** `E9:F3:80:BC:6D:F7:6C:12:96:97:88:6B:AA:8A:E2:23:FE:30:9C:FE:3D:FA:0E:B7:7A:2D:9B:85:6A:5E:A9:7D`
-
-### Como verificar a integridade do APK
-```bash
-apksigner verify --verbose --print-certs dist/CardControl-v2.1.0-release.apk
-```
-
----
-
-## 📲 Como Instalar no Android
-
-1. Baixe o arquivo `CardControl-v2.1.0-release.apk`.
-2. Abra o arquivo no gerenciador de downloads do celular e selecione **Instalar**.
-3. Se o Android exibir o alerta de segurança do Play Protect, selecione **Mais detalhes** → **Instalar assim mesmo**.
-4. Para ativar a leitura automática de notificações bancárias, consulte o guia em [`docs/guides/CONFIGURACAO_E_PERMISSOES.md`](../docs/guides/CONFIGURACAO_E_PERMISSOES.md).
+1. Tratar a chave e as senhas antigas como comprometidas e não reutilizá-las.
+2. Avaliar como os usuários existentes receberão atualizações, considerando a compatibilidade da assinatura e a preservação dos dados locais.
+3. Gerar uma nova chave em ambiente privado, configurar os segredos fora do Git e validar a assinatura em dispositivo.
+4. Publicar um novo APK somente após CI, análise estática, verificação da assinatura e teste do caminho de atualização.
