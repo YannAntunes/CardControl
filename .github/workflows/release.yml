@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    name: Publish Release to GitHub
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Signed Release APK
+        run: ./gradlew assembleRelease --console=plain
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "CardControl ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          body: |
+            ## 💳 CardControl ${{ github.ref_name }} — Lançamento Oficial
+
+            Aplicativo Android nativo para controle de cartões de crédito e rateio de faturas com **captura automática em tempo real por push bancário**, 100% offline-first.
+
+            ### 🌟 Destaques desta Versão:
+            - **Motor de Notificações:** Suporte a Nubank, Inter, Itaú, C6, Santander, Bradesco, Caixa, PicPay e Mercado Pago com anti-duplicação SHA-256.
+            - **Design System Liquid Glass:** Interface escura fluida (Obsidian/DeepSlate) com Adaptive Icons e teclados especializados (numérico, decimal, telefone e e-mail).
+            - **Precisão Contábil:** Arredondamento exato de centavos com `BigDecimal` e cálculo automático de corte de faturas (`closingDay`).
+            - **Segurança Reforçada:** Criptografia no chip de hardware via Android Keystore (`AES256-GCM`) e sanitização rigorosa de entradas.
+            - **Distribuição Direta:** Assinatura dedicada v2 (`CN=CardControl`) permitindo atualizações diretas no Android sem perda de dados.
+
+            ### 🔒 Verificação de Integridade
+            - Verifique o hash SHA-256 no arquivo anexo `SHA256SUMS.txt` ou com `apksigner verify`.
+          files: |
+            dist/CardControl-v2.1.0-release.apk
+            dist/SHA256SUMS.txt
+            app/build/outputs/apk/release/app-release.apk
