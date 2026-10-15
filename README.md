@@ -5,9 +5,10 @@
   Totalmente offline, com divisão exata de centavos e cofre criptografado no dispositivo.
 </p>
 
-<p align="center">
-  <a href="dist/CardControl-v2.1.0-release.apk"><strong>Baixar APK de Release (v2.1.0) →</strong></a>
-</p>
+> [!CAUTION]
+> **Distribuição suspensa desde 15/10/2026.** A chave privada de assinatura e as senhas do release foram expostas no histórico público do repositório.
+>
+> **Não instale nem redistribua o APK v2.1.0.** A distribuição será retomada somente após a rotação da chave e a validação do caminho de atualização das instalações existentes. Consulte o [aviso de segurança](dist/README.md). A página Releases do GitHub ainda precisa ser retirada manualmente.
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026%2B)-3DDC84?logo=android&logoColor=white">
@@ -138,17 +139,17 @@ Requer **JDK 17** e **Android SDK (API 34)** com `build-tools 34.0.0`.
 # Compilar e executar a suíte de testes unitários
 ./gradlew testDebugUnitTest
 
-# Compilar o APK de release otimizado e assinado
-./gradlew assembleRelease
+# Compilar o APK de desenvolvimento
+./gradlew assembleDebug
 ```
 
-O arquivo compilado será gerado em: `app/build/outputs/apk/release/app-release.apk`.
+O APK de desenvolvimento será gerado em `app/build/outputs/apk/debug/app-debug.apk`. A assinatura de release está **desativada** enquanto a chave comprometida não for substituída e a estratégia de atualização validada. Não distribua um artefato de release gerado localmente.
 
 | Comando | O que faz |
 | --- | --- |
 | `./gradlew testDebugUnitTest` | Executa todas as asserções de segurança e domínio |
 | `./gradlew assembleDebug` | Compila o APK de desenvolvimento |
-| `./gradlew assembleRelease` | Compila o binário de release otimizado e assinado |
+| `./gradlew assembleRelease` | O release permanece sem assinatura configurada até a rotação da chave; não distribuir |
 | `apksigner verify --verbose <apk>` | Valida as assinaturas v1 e v2 do binário gerado |
 
 ---
@@ -177,7 +178,7 @@ O repositório possui uma suíte determinística em `app/src/test/java/com/cardc
 | `app/src/main/java/.../security/` | Sanitização de strings e validações de segurança |
 | `app/src/main/java/.../ui/` | ViewModel, telas Compose e componentes Liquid Glass |
 | `app/src/test/` | Suíte de testes unitários do harness de domínio e segurança |
-| `dist/` | Distribuições oficiais de release (.apk assinado e checksums) |
+| `dist/` | Aviso de retirada da distribuição v2.1.0; não contém APK autorizado para distribuição |
 | `docs/architecture/` | Documentação arquitetural e contratos técnicos |
 | `docs/guides/` | Tutoriais de configuração de permissões no Android 13/14 |
 | `docs/security/` | Modelo de ameaças e mapeamento de controles |
@@ -191,20 +192,20 @@ O repositório possui uma suíte determinística em `app/src/test/java/com/cardc
 
 - Dados financeiros residem exclusivamente no SQLite privado do aplicativo.
 - Zero telemetria, zero bibliotecas de terceiros de publicidade ou monitoramento.
-- O Android Manifest desativa backups em nuvem não autorizados (`android:allowBackup="false"`).
+- O Android Manifest desativa backups em nuvem não autorizados (`android:allowBackup="false"`) e define exclusões explícitas de dados privados.
 - As permissões solicitadas são estritamente `INTERNET` (para envio opcional de SMTP TLS caso configurado) e `BIND_NOTIFICATION_LISTENER_SERVICE` (para recepção de pushes).
+- A chave de assinatura de release e as senhas anteriormente versionadas devem ser consideradas comprometidas e não podem ser reutilizadas.
 - Detalhes adicionais sobre reporte responsável e modelo de ameaças em [SECURITY.md](SECURITY.md) e [`docs/security/MODELO_DE_AMEACAS.md`](docs/security/MODELO_DE_AMEACAS.md).
 
 ---
 
 ## Distribuição e instalação
 
-O APK assinado pronto para instalação direta encontra-se versionado na pasta [`dist/`](dist/):
-- **Arquivo:** [`dist/CardControl-v2.1.0-release.apk`](dist/CardControl-v2.1.0-release.apk)
-- **Checksums:** [`dist/SHA256SUMS.txt`](dist/SHA256SUMS.txt)
-- **Instruções:** [`dist/README.md`](dist/README.md)
+A distribuição do APK está suspensa por incidente de segurança. O APK v2.1.0 e seu checksum foram removidos da árvore atual do Git; consulte o [aviso de retirada](dist/README.md). A página Releases do GitHub ainda exige retirada manual, e cópias antigas podem continuar disponíveis em clones, forks e caches.
 
-Para liberar a leitura de notificações em versões recentes do Android, consulte [`docs/guides/CONFIGURACAO_E_PERMISSOES.md`](docs/guides/CONFIGURACAO_E_PERMISSOES.md).
+Não instale nem compartilhe artefatos da v2.1.0. Novos releases dependem de uma nova chave, credenciais externas ao Git, validação da assinatura e testes de atualização em dispositivo.
+
+Para configurar as permissões de leitura de notificações, consulte [`docs/guides/CONFIGURACAO_E_PERMISSOES.md`](docs/guides/CONFIGURACAO_E_PERMISSOES.md).
 
 ---
 
