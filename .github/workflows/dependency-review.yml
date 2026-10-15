@@ -5,12 +5,16 @@ on:
     branches:
       - main
 
+# Enable the Dependency Graph under Settings > Code security and analysis,
+# then define the repository variable DEPENDENCY_GRAPH_ENABLED=true to activate
+# these jobs. They are skipped safely while the feature is disabled.
 permissions:
   contents: read
   pull-requests: read
 
 jobs:
   dependency-review:
+    if: vars.DEPENDENCY_GRAPH_ENABLED == 'true'
     name: Review dependencies
     runs-on: ubuntu-latest
     steps:
