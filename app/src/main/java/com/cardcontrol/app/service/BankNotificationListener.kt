@@ -36,33 +36,18 @@ class BankNotificationListener : NotificationListenerService() {
             val db = AppDatabase.getInstance(applicationContext)
             val dao = db.appDao()
             val repo = CardRepository(dao)
-
-            if (repo.isDuplicateNotification(parsed.dedupHash, sbn.postTime)) return@launch
-
-            val matchedCard = parsed.lastFourDigits?.let { dao.getCardByLastFour(it) }
-                ?: dao.getFirstCard()
-                ?: return@launch
+            val (txId, matchedCard) = repo.processBankNotification(pkg, title, text, sbn.postTime)
+            if (txId == -1L || matchedCard == null) return@launch
 
             val holderId = matchedCard.defaultHolderId ?: return@launch
             val holder = dao.getHolderById(holderId) ?: return@launch
-
-            repo.registerExpense(
-                cardId = matchedCard.id,
-                holderId = holder.id,
-                merchant = parsed.merchant,
-                totalAmount = parsed.amount,
-                installmentsCount = parsed.installments,
-                purchaseTimestamp = sbn.postTime,
-                isAutoCaptured = true,
-                dedupHash = parsed.dedupHash
-            )
 
             if (holder.notifyByEmailOnPurchase && holder.email.isNotBlank()) {
                 val creds = CredentialStore(applicationContext)
                 if (creds.isConfigured()) {
                     val totalSpent = dao.getTotalHistoricalSpentByHolder(holder.id)
                     val totalPaid = dao.getTotalHistoricalPaidByHolder(holder.id)
-                    val currentDebt = (totalSpent - totalPaid).coerceAtLeast(0.0)
+                    val currentDebt = (totalSpent - totalPaid).coerceAtLeast(0L)
                     val remainingSubLimit = holder.subLimit - currentDebt
 
                     ReportEngine.sendInstantPurchaseEmail(

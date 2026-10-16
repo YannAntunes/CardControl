@@ -22,12 +22,16 @@ object SecuritySanitizer {
         return cleaned.ifBlank { "Titular" }
     }
 
-    fun validateFinancialAmount(amount: Double): Double {
-        require(!amount.isNaN() && !amount.isInfinite() && amount > 0.0 && amount <= 1_000_000.0) {
+    fun isValidAmountCents(cents: Long): Boolean = cents in 1L..100_000_000L
+
+    fun validateFinancialAmount(amountCents: Long): Long {
+        require(isValidAmountCents(amountCents)) {
             "Valor financeiro fora dos limites seguros."
         }
-        return amount
+        return amountCents
     }
+
+    fun validateLimitAmount(limitCents: Long): Long = limitCents.coerceIn(0L, 100_000_000L)
 
     fun validateInstallments(count: Int): Int = count.coerceIn(1, 72)
 }

@@ -14,17 +14,17 @@ import java.time.LocalDate
 data class HolderSummaryUi(
     val holder: HolderEntity,
     val monthlyInstallments: List<InstallmentEntity>,
-    val monthlySpent: Double,
-    val monthlyPaid: Double,
-    val monthlyNetDue: Double,
-    val globalCommitted: Double,
-    val availableSubLimit: Double
+    val monthlySpent: Long,
+    val monthlyPaid: Long,
+    val monthlyNetDue: Long,
+    val globalCommitted: Long,
+    val availableSubLimit: Long
 )
 
 data class CardSummaryUi(
     val card: CreditCardEntity,
-    val globalCommitted: Double,
-    val availableLimit: Double
+    val globalCommitted: Long,
+    val availableLimit: Long
 )
 
 data class DashboardUiState(
@@ -34,8 +34,8 @@ data class DashboardUiState(
     val cards: List<CreditCardEntity> = emptyList(),
     val holderSummaries: List<HolderSummaryUi> = emptyList(),
     val cardSummaries: List<CardSummaryUi> = emptyList(),
-    val totalMonthInvoice: Double = 0.0,
-    val totalMonthPaid: Double = 0.0
+    val totalMonthInvoice: Long = 0L,
+    val totalMonthPaid: Long = 0L
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -83,14 +83,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val mPaid = monthPay.filter { it.holderId == h.id }.sumOf { it.amountPaid }
             val gSpent = allInst.filter { it.holderId == h.id }.sumOf { it.amount }
             val gPaid = allPay.filter { it.holderId == h.id }.sumOf { it.amountPaid }
-            val gCommitted = (gSpent - gPaid).coerceAtLeast(0.0)
+            val gCommitted = (gSpent - gPaid).coerceAtLeast(0L)
 
             HolderSummaryUi(
                 holder = h,
                 monthlyInstallments = hMonthInst,
                 monthlySpent = mSpent,
                 monthlyPaid = mPaid,
-                monthlyNetDue = (mSpent - mPaid).coerceAtLeast(0.0),
+                monthlyNetDue = (mSpent - mPaid).coerceAtLeast(0L),
                 globalCommitted = gCommitted,
                 availableSubLimit = h.subLimit - gCommitted
             )
@@ -99,7 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val cardSummaries = cards.map { c ->
             val cSpent = allInst.filter { it.cardId == c.id }.sumOf { it.amount }
             val cPaid = allPay.filter { it.cardId == c.id }.sumOf { it.amountPaid }
-            val cCommitted = (cSpent - cPaid).coerceAtLeast(0.0)
+            val cCommitted = (cSpent - cPaid).coerceAtLeast(0L)
             CardSummaryUi(
                 card = c,
                 globalCommitted = cCommitted,
@@ -120,16 +120,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 
     fun changeMonth(delta: Long) { selectedPeriod.value = selectedPeriod.value.plusMonths(delta) }
-    fun addHolder(name: String, whatsapp: String, email: String, subLimit: Double) {
+    fun addHolder(name: String, whatsapp: String, email: String, subLimit: Long) {
         viewModelScope.launch { repository.addHolder(name, whatsapp, email, subLimit) }
     }
-    fun addCard(name: String, lastFour: String, limit: Double, closing: Int, due: Int, defaultHolderId: Long?) {
+    fun addCard(name: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?) {
         viewModelScope.launch { repository.addCard(name, lastFour, limit, closing, due, defaultHolderId) }
     }
-    fun addExpense(cardId: Long, holderId: Long, merchant: String, amount: Double, installments: Int) {
+    fun addExpense(cardId: Long, holderId: Long, merchant: String, amount: Long, installments: Int) {
         viewModelScope.launch { repository.registerExpense(cardId, holderId, merchant, amount, installments) }
     }
-    fun addPayment(holderId: Long, cardId: Long?, amount: Double, notes: String) {
+    fun addPayment(holderId: Long, cardId: Long?, amount: Long, notes: String) {
         val period = selectedPeriod.value
         viewModelScope.launch { repository.registerPayment(holderId, cardId, amount, period.monthValue, period.year, notes) }
     }
