@@ -5,11 +5,6 @@
   Totalmente offline, com divisão exata de centavos e cofre criptografado no dispositivo.
 </p>
 
-> [!CAUTION]
-> **Distribuição suspensa desde 15/10/2026.** A chave privada de assinatura e as senhas do release foram expostas no histórico público do repositório.
->
-> **Não instale nem redistribua o APK v2.1.0.** A distribuição será retomada somente após a rotação da chave e a validação do caminho de atualização das instalações existentes. Consulte o [aviso de segurança](dist/README.md). A página Releases do GitHub ainda precisa ser retirada manualmente.
-
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026%2B)-3DDC84?logo=android&logoColor=white">
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?logo=kotlin&logoColor=white">
