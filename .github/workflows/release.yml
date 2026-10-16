@@ -152,7 +152,7 @@ jobs:
             exit 1
           fi
           signature_details="$("$apksigner_path" verify --verbose --print-certs "$apk_path" 2>&1)"
-          actual_fingerprint="$(printf '%s\n' "$signature_details" | sed -nE 's/^Signer #1 certificate SHA-256 digest: ([[:xdigit:]:]+).*$/\1/p' | head -n 1 | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          actual_fingerprint="$(printf '%s\n' "$signature_details" | sed -nE 's/.*certificate SHA-256 digest:[[:space:]]*([[:xdigit:]:]+).*/\1/p' | head -n 1 | tr -d ':' | tr '[:lower:]' '[:upper:]')"
           expected_fingerprint="$(printf '%s' "$CARDCONTROL_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
           if [[ -z "$actual_fingerprint" || "$actual_fingerprint" != "$expected_fingerprint" ]]; then
             echo "::error::Release blocked: APK signer fingerprint does not match CARDCONTROL_CERT_SHA256."
