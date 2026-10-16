@@ -1,5 +1,8 @@
 package com.cardcontrol.app.data.local
 
+import java.text.Normalizer
+import java.util.Locale
+
 enum class SupportedBank(
     val id: String,
     val displayName: String,
@@ -17,30 +20,42 @@ enum class SupportedBank(
     OTHER("other", "Outro banco", emptySet());
 
     companion object {
+        private val PT_BR = Locale("pt", "BR")
+
         fun fromId(id: String?): SupportedBank {
             if (id == null) return OTHER
-            val normalized = id.trim().lowercase()
+            val normalized = id.trim().lowercase(PT_BR)
             return entries.firstOrNull { it.id == normalized } ?: OTHER
         }
 
-        fun fromPackageName(packageName: String): SupportedBank {
+        fun fromPackageName(packageName: String?): SupportedBank {
+            if (packageName == null) return OTHER
             return entries.firstOrNull { it.packageNames.contains(packageName) } ?: OTHER
         }
 
+        /**
+         * Infere o banco com base no apelido/nome do cartão.
+         * Política de segurança estrita:
+         * - Se nenhum banco for identificado ou se mais de um banco for encontrado no nome (ambiguidade),
+         *   retorna [OTHER]. Nunca associa automaticamente de forma insegura.
+         */
         fun inferFromCardName(cardName: String): SupportedBank {
-            val normalized = cardName.lowercase()
-            return when {
-                normalized.contains("nubank") || normalized.contains("nu ") -> NUBANK
-                normalized.contains("inter") -> INTER
-                normalized.contains("itau") || normalized.contains("itaú") -> ITAU
-                normalized.contains("c6") -> C6
-                normalized.contains("santander") -> SANTANDER
-                normalized.contains("bradesco") -> BRADESCO
-                normalized.contains("caixa") -> CAIXA
-                normalized.contains("picpay") -> PICPAY
-                normalized.contains("mercado") -> MERCADO_PAGO
-                else -> OTHER
-            }
+            val normalized = Normalizer.normalize(cardName.lowercase(PT_BR), Normalizer.Form.NFD)
+                .replace(Regex("""\p{Mn}+"""), "")
+            val tokens = normalized.split(Regex("""[^a-z0-9]+""")).filter { it.isNotEmpty() }.toSet()
+
+            val matches = mutableListOf<SupportedBank>()
+            if (tokens.any { it in setOf("nu", "nubank") }) matches.add(NUBANK)
+            if (tokens.any { it in setOf("inter") }) matches.add(INTER)
+            if (tokens.any { it in setOf("itau", "itaucard") }) matches.add(ITAU)
+            if (tokens.any { it in setOf("c6", "c6bank") }) matches.add(C6)
+            if (tokens.any { it in setOf("santander") }) matches.add(SANTANDER)
+            if (tokens.any { it in setOf("bradesco") }) matches.add(BRADESCO)
+            if (tokens.any { it in setOf("caixa") }) matches.add(CAIXA)
+            if (tokens.any { it in setOf("picpay") }) matches.add(PICPAY)
+            if (tokens.any { it in setOf("mercado", "mercadopago") }) matches.add(MERCADO_PAGO)
+
+            return if (matches.size == 1) matches.first() else OTHER
         }
     }
 }

@@ -125,13 +125,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addHolder(name: String, whatsapp: String, email: String, subLimit: Long) {
         viewModelScope.launch { repository.addHolder(name, whatsapp, email, subLimit) }
     }
-    fun addCard(name: String, bank: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?) {
+
+    fun addCard(
+        name: String,
+        bank: String = SupportedBank.OTHER.id,
+        lastFour: String,
+        limit: Long,
+        closing: Int,
+        due: Int,
+        defaultHolderId: Long?,
+        issuerBank: String? = null
+    ) {
         viewModelScope.launch {
-            repository.addCard(name, bank, lastFour, limit, closing, due, defaultHolderId)
+            repository.addCard(
+                name = name,
+                bank = bank,
+                lastFour = lastFour,
+                totalLimit = limit,
+                closingDay = closing,
+                dueDay = due,
+                defaultHolderId = defaultHolderId,
+                issuerBank = issuerBank
+            )
             _uiMessages.emit("Cartão cadastrado.")
         }
     }
-    fun updateCard(id: Long, name: String, bank: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?) {
+
+    fun updateCard(
+        id: Long,
+        name: String,
+        bank: String,
+        lastFour: String,
+        limit: Long,
+        closing: Int,
+        due: Int,
+        defaultHolderId: Long?
+    ) {
         viewModelScope.launch {
             val updated = repository.updateCard(id, name, bank, lastFour, limit, closing, due, defaultHolderId)
             _uiMessages.emit(
@@ -140,6 +169,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }
+
     fun deleteCard(id: Long) {
         viewModelScope.launch {
             val deleted = repository.deleteCardIfUnused(id)
@@ -149,9 +179,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }
+
     fun addExpense(cardId: Long, holderId: Long, merchant: String, amount: Long, installments: Int) {
         viewModelScope.launch { repository.registerExpense(cardId, holderId, merchant, amount, installments) }
     }
+
     fun addPayment(holderId: Long, cardId: Long?, amount: Long, notes: String) {
         val period = selectedPeriod.value
         viewModelScope.launch { repository.registerPayment(holderId, cardId, amount, period.monthValue, period.year, notes) }

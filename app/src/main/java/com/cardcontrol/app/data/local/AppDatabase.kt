@@ -65,19 +65,28 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adiciona a coluna canônica de banco (bank) e índice Room, com backfill retroativo seguro. */
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `credit_cards` ADD COLUMN `bank` TEXT NOT NULL DEFAULT 'other'")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_credit_cards_bank` ON `credit_cards` (`bank`)")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'nubank' WHERE lower(`name`) LIKE '%nubank%' OR lower(`name`) LIKE '%nu %'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'inter' WHERE lower(`name`) LIKE '%inter%'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'itau' WHERE lower(`name`) LIKE '%itau%' OR lower(`name`) LIKE '%itaú%'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'c6' WHERE lower(`name`) LIKE '%c6%'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'santander' WHERE lower(`name`) LIKE '%santander%'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'bradesco' WHERE lower(`name`) LIKE '%bradesco%'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'caixa' WHERE lower(`name`) LIKE '%caixa%'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'picpay' WHERE lower(`name`) LIKE '%picpay%'")
-                db.execSQL("UPDATE `credit_cards` SET `bank` = 'mercadopago' WHERE lower(`name`) LIKE '%mercado%'")
+
+                // Backfill retroativo seguro: somente atualiza quando a inferência for estrita e inequívoca
+                val cursor = db.query("SELECT `id`, `name` FROM `credit_cards`")
+                val updates = mutableListOf<Pair<Long, String>>()
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val name = cursor.getString(1) ?: ""
+                    val inferred = SupportedBank.inferFromCardName(name)
+                    if (inferred != SupportedBank.OTHER) {
+                        updates.add(id to inferred.id)
+                    }
+                }
+                cursor.close()
+
+                for ((id, bankId) in updates) {
+                    db.execSQL("UPDATE `credit_cards` SET `bank` = ? WHERE `id` = ?", arrayOf(bankId, id))
+                }
             }
         }
 
