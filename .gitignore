@@ -22,6 +22,7 @@ secrets.properties
 # Distribution binaries are published through GitHub Releases
 *.apk
 *.aab
+*.zip
 dist/
 
 # OS and IDE files

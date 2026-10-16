@@ -15,28 +15,37 @@ O projeto CardControl adota o **Antigravity** como agente principal e orquestrad
   - Recomendar ou autorizar integração somente com evidências reais comprovadas.
   - **Regra de Ouro:** Não aceita o relatório do implementador como prova; confere arquivos, diffs, logs e saídas reais do terminal.
 
-### B. Subagente Implementador (`.agents/agents/implementador.md`)
-- **Papel:** Especialista em desenvolvimento Android nativo (Kotlin, Jetpack Compose, Room SQLite offline-first).
+### B. Agente 1 — Auditor Técnico e Segurança (`.agents/agents/auditor_seguranca.md` / `auditor.md`)
+- **Papel:** Auditor técnico adversarial com ferramentas estritamente limitadas a **somente-leitura** e testes/diagnósticos (`view_file`, `list_dir`, `grep_search`, `run_command`, `read_url_content`, `search_web`).
 - **Responsabilidades:**
-  - Receber tarefas delimitadas com critérios verificáveis.
-  - Trabalhar em branch ou worktree isolada quando suportado.
-  - Preservar alterações preexistentes e não modificar arquivos fora do escopo sem justificativa técnica.
-  - Atacar a causa raiz dos problemas, evitando máscaras ou fallbacks inseguros.
-  - Criar e atualizar testes de regressão automatizados no `SecurityAndDomainTestHarness.kt`.
-  - Registrar comandos executados e resultados reais de compilação e teste.
-  - Não realizar commit, push, merge ou publicação por iniciativa própria.
+  - Analisar arquitetura, persistência Room SQLite privada (`card_control_offline.db`), funcionamento 100% offline e dependências.
+  - Auditar concorrência estática (`CardRepository.expenseMutex`), integridade contábil em centavos (`Long`) e defesas contra CRLF, Path Traversal e ReDoS.
+  - Verificar integridade de CI/CD, pinagem de workflows por SHA e prevenção contra exposição de credenciais/keystores.
+  - Separar rigorosamente fatos comprovados de hipóteses e reportar achados com severidade e recomendação na causa raiz.
 
-### C. Subagente Auditor Independente (`.agents/agents/auditor.md`)
-- **Papel:** Revisor técnico adversarial com contexto isolado.
-- **Ferramentas:** Estritamente limitadas a **somente-leitura** e execução de testes/diagnósticos (`view_file`, `list_dir`, `grep_search`, `run_command`, `read_url_content`, `search_web`), sem permissão de escrita ou edição no código.
+### C. Agente 2 — Implementador Android (`.agents/agents/implementador_android.md` / `implementador.md`)
+- **Papel:** Especialista em desenvolvimento Android nativo (Kotlin 1.9.24, Room 2.6.1 SQLite, Android Keystore).
 - **Responsabilidades:**
-  - Iniciar a revisão em contexto separado após a implementação.
-  - Inspecionar diff real (`git diff`, `git diff --stat origin/main`) e código adjacente.
-  - Buscar bugs, regressões, falhas de segurança (CRLF, Path Traversal, ReDoS), concorrência e integridade financeira (centavos `Long`).
-  - Verificar se os testes cobrem cenários reais ou apenas asserções tautológicas/mocks.
-  - Separar rigorosamente fatos comprovados de hipóteses.
-  - Reportar cada achado com severidade, arquivo, localização, evidência e recomendação.
-  - Emitir parecer fundamentado: Aprovado, Aprovado com Ressalvas ou Bloqueado.
+  - Receber tarefas delimitadas com critérios verificáveis e atuar na causa raiz dos problemas.
+  - Preservar a arquitetura offline-first e o modelo canônico de centavos inteiros (`Long`).
+  - Manter migrações de banco seguras (`MIGRATION_2_3`) e schemas KSP exportados em `app/schemas/`.
+  - Criar e atualizar testes de regressão automatizados no `SecurityAndDomainTestHarness.kt`.
+  - Não realizar commit, push ou merge sem autorização do coordenador.
+
+### D. Agente 3 — Front-end / UI/UX Android (`.agents/agents/frontend_ui_ux.md`)
+- **Papel:** Especialista em interface Android Jetpack Compose e experiência do usuário.
+- **Responsabilidades:**
+  - Atuar sempre que correções ou melhorias demandarem ajustes visuais.
+  - Reutilizar o design system oficial `LiquidGlass.kt` (tema Obsidian/DeepSlate, GlassTextField, LiquidPillSelector), evitando dependências externas desnecessárias.
+  - Garantir estados de carregamento, erro, vazio, diálogos com teclados dedicados e acessibilidade (contrastes, contentDescription).
+  - Aplicar o princípio de linguagem natural e clara do **Humanize** e o minimalismo/YAGNI do **Ponytail**.
+
+### E. Agente 4 — QA e Revisor Independente (`.agents/agents/qa_revisor.md`)
+- **Papel:** Validador adversarial de qualidade e aprovação.
+- **Responsabilidades:**
+  - Executar e auditar testes automatizados (`testDebugUnitTest`, `lintDebug`, `assembleDebug` e `test_bundle_canary.py`).
+  - Inspecionar o diff completo (`git diff --stat origin/main`) em busca de regressões ou efeitos colaterais.
+  - Emitir parecer fundamentado: **Aprovado**, **Aprovado com Ressalvas** ou **Rejeitado/Bloqueado**.
 
 ---
 
@@ -125,3 +134,29 @@ Nenhuma funcionalidade pode ser dada como concluída sem execução e aprovaçã
 - Não fazer commit, push, merge de PRs, criação de tags ou publicação sem autorização explícita.
 - Não reintroduzir chaves criptográficas ou arquivos `.keystore` no Git.
 - Não alucinar execuções de comandos nem declarar pronto o que não foi comprovado no terminal.
+
+---
+
+## 8. Agent Skills no Repositório
+
+O repositório possui Agent Skills modulares em `.agents/skills/` (e `.agent/skills/`) para padronizar e acelerar as ações repetitivas de desenvolvimento e validação:
+
+| Skill | Caminho | Finalidade |
+| :--- | :--- | :--- |
+| **`cardcontrol-verify`** | [SKILL.md](file:///c:/Users/kelvi/Desktop/CardControl/.agents/skills/cardcontrol-verify/SKILL.md) | Execução automatizada dos gates de teste (`testDebugUnitTest`) e build (`assembleDebug`), detecção inteligente de JDK e relatórios. |
+| **`bank-notification-parser`** | [SKILL.md](file:///c:/Users/kelvi/Desktop/CardControl/.agents/skills/bank-notification-parser/SKILL.md) | Guia e pipeline de extração de notificações bancárias, deduplicação SHA-256 (120s), sanitização e testes no Harness. |
+| **`room-db-migration`** | [SKILL.md](file:///c:/Users/kelvi/Desktop/CardControl/.agents/skills/room-db-migration/SKILL.md) | Evolução segura do banco offline SQLite (`card_control_offline.db`), migração v2->v3 (centavos `Long`), índices e schemas KSP. |
+| **`agent-state-sync`** | [SKILL.md](file:///c:/Users/kelvi/Desktop/CardControl/.agents/skills/agent-state-sync/SKILL.md) | Sincronização e auditoria dos artefatos de governança (`CARDCONTROL_STATE.md`, `CARDCONTROL_TASKS.yaml`, `CARDCONTROL_EXECPLAN.md`). |
+| **`financial-math-audit`** | [SKILL.md](file:///c:/Users/kelvi/Desktop/CardControl/.agents/skills/financial-math-audit/SKILL.md) | Regras matemáticas com representação canônica em centavos (`Long`), rateio exato de parcelas e virada de ano no fechamento. |
+
+---
+
+## 9. Ferramentas de Engenharia Integradas
+
+O ambiente conta com ferramentas especializadas instaladas a partir de seus repositórios oficiais:
+
+| Ferramenta | Repositório Oficial | Localização no Projeto / Ambiente | Finalidade e Diretrizes |
+| :--- | :--- | :--- | :--- |
+| **`Humanize`** | `https://github.com/ameenmo/humanize-skill` | `.agents/skills/humanize/` | Revisão de linguagem em diálogos, mensagens de validação, documentação e comentários. Preserva a precisão técnica e remove clichês ou jargões artificiais. |
+| **`Ponytail`** | `https://github.com/DietrichGebert/ponytail` | `.agents/rules/ponytail.md` e `.agents/skills/ponytail*/` | Modo sênior pragmático: menor código que resolve o problema por completo. Foco em reutilização, simplicidade e YAGNI, sem cortar testes, tratamento de erros, concorrência ou segurança. |
+| **`Context Mode`** | `https://github.com/mksglu/context-mode` | `.agents/rules/context-mode.md`, `.agents/skills/context-mode/`, `mcp_config.json` | Servidor MCP (`node cli.bundle.mjs`) e indexador FTS5. Reduz overhead de saídas extensas no contexto do modelo e gerencia logs e diagnósticos de forma delimitada. |

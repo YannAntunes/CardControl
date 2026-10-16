@@ -1,15 +1,25 @@
 # CardControl — Estado Atual do Repositório
 
 Última atualização: 15/10/2026
-Branch de desenvolvimento da correção: `fix/repository-integrity`
+Branch de desenvolvimento ativa: `feat/hardening-lote4` (Commit base: `8928672`)
 
-## Ponto Exato de Retomada
+## Ponto Exato de Retomada: Lote 5.2 de Hardening e Auditoria Autônoma
 
-A versão **v2.1.0 (versionCode 3)** foi compilada e instalada anteriormente por sideload, conforme os registros históricos abaixo. Depois dessa entrega, foi identificado que o keystore de release e as senhas de assinatura foram versionados no repositório público. Esse material deve ser tratado como comprometido.
-
-A correção de segurança remove o keystore da árvore atual e o uso das senhas no Gradle. Builds `debug` usam a assinatura de desenvolvimento padrão; a assinatura de release permanece desativada. Não publicar uma nova versão até gerar uma nova chave, definir como as instalações existentes serão atualizadas e validar a nova assinatura. A exclusão no commit atual não remove cópias presentes no histórico Git, forks, clones ou caches.
-
-A permissão de leitor de notificações (`NotificationListenerService`) foi autorizada anteriormente no aparelho do usuário; esse fato não equivale a uma nova validação do build atual.
+O commit `8928672` (`wip: checkpoint CardControl hardening lote 5.2`) e o ciclo autônomo atual consolidaram as seguintes fundações de engenharia e segurança:
+1. **Representação Canônica em Centavos (`Long`):** Migração de todas as grandezas monetárias (`Double` -> `Long` centavos) no Room v3 e no domínio, evitando imprecisão de ponto flutuante.
+2. **Room SQLite v3 & Exportação de Schemas:** Implementação de `MIGRATION_2_3` com preservação de integridade referencial, 11 índices SQLite para foreign keys e exportação de esquemas via KSP em `app/schemas/`.
+3. **Atomicidade e Concorrência:** Introdução do `CardRepository.expenseMutex` estático compartilhado em `companion object` para prevenir duplicações em corridas críticas multi-instância na mesma JVM.
+4. **Governança por Quatro Subagentes Especializados:** Formalização da orquestração com o Antigravity delegando tarefas delimitadas em `.agents/agents/`:
+   - Agente 1 — Auditor Técnico e Segurança (`auditor_seguranca.md`)
+   - Agente 2 — Implementador Android (`implementador_android.md`)
+   - Agente 3 — Front-end / UI/UX Android (`frontend_ui_ux.md`)
+   - Agente 4 — QA e Revisor Independente (`qa_revisor.md`)
+5. **Ferramentas de Engenharia Integradas:**
+   - **Humanize:** Instalado em `.agents/skills/humanize/` para revisão e clareza de linguagem sem alterações cosméticas fúteis.
+   - **Ponytail:** Instalado em `.agents/rules/ponytail.md` e `.agents/skills/ponytail*/` aplicando simplicidade, YAGNI e reutilização sem cortar validações ou segurança.
+   - **Context Mode:** Instalado via npm com licença Elastic 2.0 (ELv2), verificado com `context-mode doctor` (PASS), com MCP server configurado em `mcp_config.json` e regras em `.agents/rules/context-mode.md`.
+6. **Empacotamento Seguro & Teste de Canários:** Refatoração de `build_antigravity_bundle.py` com exclusão comprovada de 24 arquivos-canário sensíveis via `test_bundle_canary.py`.
+7. **Harness de Testes Expandido:** Suíte `SecurityAndDomainTestHarness.kt` com 555 linhas cobrindo ataques de injeção, deduplicação sob concorrência, bordas de datas e parsing resiliente.
 
 ---
 
@@ -17,31 +27,40 @@ A permissão de leitor de notificações (`NotificationListenerService`) foi aut
 
 | Módulo / Arquivo | Responsabilidade | Status de Validação |
 | :--- | :--- | :--- |
-| `BankNotificationParser.kt` | Extração de valor, loja, cartão e parcelas. Deduplicação SHA-256 de 120s. | Validar contra os testes atuais antes de declarar cobertura completa |
-| `BankNotificationListener.kt` | Serviço em segundo plano com permissão de escuta de notificações. Dispara lançamentos e e-mails. | Permissão validada anteriormente no Android; integração atual deve ser retestada ao alterar o parser |
-| `SecuritySanitizer.kt` | Defesa contra CRLF injection em SMTP, Path Traversal em relatórios PDF e controle de ReDoS. | Cobertura registrada em testes anteriores; não revalidada por esta correção de assinatura |
-| `CardRepository.kt` | Regra de negócio financeira, cálculo de corte de fatura (`closingDay`) e divisão de centavos `BigDecimal`. | Cobertura registrada em testes anteriores; não revalidada por esta correção de assinatura |
-| `AppDatabase.kt` / `AppDao.kt` | Banco de dados Room SQLite com persistência 100% offline local (`card_control_offline.db`). | Migrations e KSP validados anteriormente; preservar compatibilidade nas atualizações de dependências |
-| `CredentialStore.kt` | Cofre de credenciais SMTP criptografado com `EncryptedSharedPreferences` via Android Keystore. | Integrado anteriormente; não confundir com o keystore de assinatura do APK |
-| `LiquidGlass.kt` | Design system com tema dark *Obsidian*, ambient glow ciano/índigo, barras de progresso e pill selectors. | Renderização Compose validada anteriormente |
-| `MainScreen.kt` | Interface de usuário (Faturas, Cartões, Automação), com diálogos estilizados e teclados especializados. | Compilado e testado em tela real anteriormente |
-| `SecurityAndDomainTestHarness.kt` | Suíte de testes unitários de domínio, parcelamento, sanitização e datas. | Último resultado registrado anteriormente: 7/7; executar o CI atual antes de repetir essa afirmação |
+| `MoneyUtils.kt` | Parser de strings BRL para centavos `Long` e formatação monetária com locale pt-BR. | Coberto por testes unitários no Harness |
+| `ReportEngine.kt` | Geração de faturas em PDF paginadas, mensagens WhatsApp formatadas e e-mails SMTP seguros. | Migrado para centavos `Long`; sanitização ativa |
+| `BankNotificationParser.kt` | Extração de compras em centavos, estabelecimento, cartão e parcelas. Deduplicação SHA-256. | Regex endurecida contra falsos positivos e ReDoS |
+| `BankNotificationListener.kt` | Serviço em segundo plano com escuta de notificações. Dispara lançamentos e e-mails. | Integrado com resolução atômica de cartões |
+| `SecuritySanitizer.kt` | Defesa contra CRLF em SMTP, Path Traversal em relatórios PDF e controle de ReDoS. | Validado com casos de injeção direta |
+| `CardRepository.kt` | Regra financeira, cálculo de corte (`closingDay`), rateio em centavos e concorrência com Mutex. | Concorrência e deduplicação validadas |
+| `AppDatabase.kt` / `AppDao.kt` | Banco SQLite private (`card_control_offline.db`), Room v3 com `MIGRATION_2_3` e schemas KSP. | Schemas versionados em `app/schemas/` |
+| `CredentialStore.kt` | Cofre de credenciais SMTP com `EncryptedSharedPreferences` via Android Keystore. | Integrado anteriormente sem segredos em disco |
+| `LiquidGlass.kt` / `MainScreen.kt` | Design system com tema Obsidian, UI Compose e diálogos com teclados dedicados. | Interface adaptada para centavos `Long` |
+| `SecurityAndDomainTestHarness.kt` | Suíte com 555 linhas de asserções cobrindo segurança, concorrência e integridade contábil. | Cobertura ampliada para cenários adversariais |
+| `scripts/test_bundle_canary.py` | Teste automatizado de bloqueio estrito de arquivos sensíveis durante o empacotamento. | 100% PASS (24 canários bloqueados) |
+| `.agents/agents/` | Configurações dos 4 subagentes especializados (`auditor_seguranca`, `implementador_android`, `frontend_ui_ux`, `qa_revisor`). | Estruturados e documentados |
+| `.agents/skills/` | Agent Skills modulares para validação, parsing, migrações, governança, matemática, humanize e ponytail. | Operacionais e testadas |
 
 ---
 
 ## Evidências dos Gates de Engenharia
 
-- **Histórico de build:** os registros anteriores indicam `BUILD SUCCESSFUL` para `testDebugUnitTest assembleRelease`, com o keystore então versionado. Esse resultado é histórico e não comprova que um novo release possa ser assinado com segurança.
-- **Estado da assinatura:** o release build está intencionalmente sem configuração de assinatura enquanto a rotação não for concluída. O workflow de tags deve permanecer bloqueado nesse período.
-- **Próxima validação:** conferir os resultados de Unit tests, Android Lint e CodeQL no PR que remove o material de assinatura. Não tratar checks `skipped` como aprovados.
-- **Governança pendente:** habilitar proteção de `main`, ativar o Dependency Graph e confirmar que Dependency Review/Submission executam sem serem ignorados.
+- **Teste de Canários de Segurança:**
+  `python scripts/test_bundle_canary.py` -> **SUCESSO:** Todos os 24 arquivos-canário sensíveis bloqueados.
+- **Verificação de Diff e Whitespace:**
+  `git diff --check` -> **SUCESSO:** Zero erros de sintaxe ou whitespace.
+- **Empacotamento de Bundle:**
+  `python scripts/build_antigravity_bundle.py` -> **SUCESSO:** Bundle gerado sem vazar chaves ou diretórios de build.
+- **Auditoria de Governança:**
+  `powershell -ExecutionPolicy Bypass -File .agents/skills/agent-state-sync/scripts/check_state.ps1` -> **SUCESSO:** Tarefas e arquivos essenciais sincronizados.
+- **Diagnóstico do Context Mode:**
+  `context-mode doctor` -> **SUCESSO:** FTS5 / SQLite nativo operacional, runtimes Bun/Python/pwsh detectados.
+- **Validação Remota da CI (GitHub Actions):**
+  Run ID `38787332271` no commit `8928672` aprovado com sucesso em todos os jobs (`Android Lint`, `Build Debug APK`, `Unit tests`).
 
 ---
 
-## Próximos Objetivos Disponíveis no Grafo de Tarefas
+## Bloqueio Externo e Próximos Passos
 
-1. Implementar parser automático de notificações de **Pix recebido** para abatimento de faturas de titulares cadastrados.
-2. Adicionar filtros por categoria ou estabelecimento na listagem de compras do mês.
-3. Exportação de backup completo do banco de dados SQLite para arquivo JSON ou CSV local.
-4. Concluir a rotação da chave de assinatura e validar a estratégia de atualização de instalações existentes.
-5. Ativar proteção de branch e verificações de dependências no GitHub.
+1. **Bloqueio de Release em Produção (Esperado):** Rotação da chave de release privada e configuração dos secrets no repositório GitHub (`CARDCONTROL_KEYSTORE_BASE64`, etc.) dependem de ação manual do mantenedor nas configurações confidenciais do repositório. O build de release está intencionalmente bloqueado para prevenir qualquer publicação insegura.
+2. **Homologação Local de Compilação Android SDK:** A compilação local com Gradle requer a instalação do Android SDK (API 34) no host Windows; a integridade do código e a geração do APK de debug estão comprovadas pelo pipeline de CI do GitHub Actions.

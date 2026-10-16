@@ -45,6 +45,13 @@ tasks:
     owner: "UI/UX"
     verification: "GlassTextField with KeyboardType.Number, Decimal, Phone, Email"
 
+  - id: "TASK-010"
+    title: "Hardening de integridade contábil (centavos Long), concorrência e exportação de schemas Room v3"
+    status: "COMPLETED"
+    owner: "Security / Core Data"
+    dependencies: ["TASK-001", "TASK-002", "TASK-003"]
+    verification: "Room v3 migration, MoneyUtils cents conversion, canary test PASS and concurrency harness"
+
   - id: "TASK-008"
     title: "Detecção e conciliação automática de Pix recebido para abatimento"
     status: "PENDING"
