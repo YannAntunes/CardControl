@@ -1,66 +1,57 @@
-# Procedimento Operacional: Assinatura e Publicação de Releases (v2.3.0+)
+# Assinatura e Publicação de Releases
 
-## 1. Contexto de Segurança e Revogação
+## Situação de segurança
 
-A chave legada anteriormente presente em `app/release.keystore` e as senhas comitadas no histórico inicial foram declaradas como permanentemente comprometidas e revogadas.
+A chave de release anterior e as senhas que chegaram ao histórico público são consideradas comprometidas. A nova chave precisa ficar fora do Git e ser preservada em backup offline.
 
-Para a versão **v2.2.0 em diante e consolidada na v2.3.0**, o CardControl aplica as seguintes diretrizes inegociáveis:
-- Proibição de armazenamento de qualquer `.keystore`, `.jks` ou segredo dentro do repositório Git.
-- Gradle configurado para carregar credenciais estritamente via variáveis de ambiente (`CARDCONTROL_KEYSTORE_*`) ou `local.properties` ignorado.
-- Workflow do GitHub Actions (`.github/workflows/release.yml`) com validação de segurança que bloqueia a publicação se arquivos de keystore estiverem rastreados pelo Git ou se senhas forem identificadas no código.
+Decisão de assinatura: o responsável confirmou que nenhum dispositivo instalou APK assinado com a chave anterior e que a release foi retirada. A versão 2.3.0 usará uma nova keystore persistente, fora do Git; a identidade antiga não será reutilizada. Essa decisão dispensa preservar atualização in-place de instalações com o certificado anterior, desde que a confirmação esteja correta. O workflow exige os quatro secrets, o fingerprint confiável e CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED=true, e gera somente uma Draft Release para revisão humana.
 
----
+## Inicialização única
 
-## 2. Passo a Passo para Gerar Nova Chave e Publicar Release
+Escolha um computador confiável para manter a keystore e guarde um backup offline seguro. O gerador não sobrescreve keystores existentes e, por padrão, salva os arquivos fora do repositório.
 
-### Passo 1: Gerar a Keystore de Produção de Forma Segura
+### Windows
 
-Utilize o utilitário incluído no repositório. Ele cria o par de chaves RSA 2048 bits com validade de 10.000 dias, extrai o Fingerprint SHA-256 e gera o Base64 sem salvar credenciais no Git:
+Com o GitHub CLI instalado e autenticado (`gh auth login`), execute a partir da raiz do repositório somente depois de aprovar a estratégia de atualização:
 
-**No Windows (PowerShell):**
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/generate_release_keystore.ps1
+powershell -ExecutionPolicy Bypass -File scripts/generate_release_keystore.ps1 -AcknowledgeUpgradeCompatibility -SetGitHubSecrets
 ```
 
-**No Linux / macOS (Bash):**
+### Linux/macOS
+
 ```bash
 chmod +x scripts/generate_release_keystore.sh
-./scripts/generate_release_keystore.sh
+./scripts/generate_release_keystore.sh --acknowledge-upgrade-compatibility --set-github-secrets
 ```
 
-> [!IMPORTANT]
-> Faça um backup físico e offline seguro do arquivo `cardcontrol-release.jks`. Se essa chave for perdida, não será possível atualizar diretamente instalações pré-existentes.
+Os scripts criam uma keystore persistente, cadastram os quatro secrets e definem as variables CARDCONTROL_CERT_SHA256 e CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED=true. A configuracao so e considerada concluida quando o GitHub confirma os quatro secrets e as duas variables.
 
-### Passo 2: Configurar os Segredos no GitHub Actions (Opcional / Recomendado para Chave Fixa)
+## Provisionar a chave persistente ja criada
 
-O pipeline do GitHub Actions suporta dois modos operacionais de assinatura:
-1. **Modo Automático Efêmero (Padrão sem secrets):** Caso nenhum segredo esteja cadastrado no repositório, o workflow executa automaticamente `scripts/generate_release_keystore.sh` em tempo de execução no runner seguro, gerando uma keystore RSA 2048 válida e assinando o APK sem bloquear o build.
-2. **Modo Chave Persistida (Recomendado):** Caso deseje manter a mesma chave de assinatura entre diferentes versões (permitindo atualizações diretas no Android sem reinstalação), gere a chave via `generate_release_keystore.ps1` / `.sh` e cadastre os 4 Repository Secrets em **Settings → Secrets and variables → Actions**:
+Como a keystore desta configuracao ja foi criada em `CardControlSigning`, nao execute novamente o gerador. Depois de autenticar `gh auth login --web`, execute:
 
-| Nome do Segredo | Descrição |
-| :--- | :--- |
-| `CARDCONTROL_KEYSTORE_BASE64` | Conteúdo do arquivo `.jks` codificado em string Base64 |
-| `CARDCONTROL_KEYSTORE_PASSWORD` | Senha de abertura da keystore |
-| `CARDCONTROL_KEY_ALIAS` | Alias da chave (padrão: `cardcontrol`) |
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/provision_release_secrets.ps1 -AcknowledgeNoExistingInstallations
+```
+
+O script valida que o arquivo local de credenciais corresponde exatamente a keystore, calcula o fingerprint, envia os secrets via stdin sem imprimir valores e verifica os nomes e variables de volta no GitHub. Se a configuracao remota existente precisar ser substituida pela nova chave, acrescente `-ReplaceExistingConfiguration`; isso atualiza os quatro signing secrets e as duas variables para a mesma identidade nova. Nenhuma release e publicada.## Cadastro manual
+
+Se não for usar o GitHub CLI, execute o gerador com a confirmação explícita de compatibilidade, mas sem `-SetGitHubSecrets` no Windows ou sem `--set-github-secrets` no Linux/macOS. Faça isso somente depois da avaliação estar concluída. Use o arquivo local protegido `release-secrets.env` para cadastrar os seguintes **Repository Secrets** em [Settings → Secrets and variables → Actions](https://github.com/kauankelvin7/CardControl/settings/secrets/actions):
+
+| Nome | Conteúdo |
+| --- | --- |
+| `CARDCONTROL_KEYSTORE_BASE64` | Keystore em Base64 |
+| `CARDCONTROL_KEYSTORE_PASSWORD` | Senha da keystore |
+| `CARDCONTROL_KEY_ALIAS` | Alias usado na chave |
 | `CARDCONTROL_KEY_PASSWORD` | Senha da chave privada |
 
-### Passo 3: Disparar o Workflow de Release
+No Windows, use `powershell -ExecutionPolicy Bypass -File scripts/generate_release_keystore.ps1 -AcknowledgeUpgradeCompatibility`; no Linux/macOS, use `./scripts/generate_release_keystore.sh --acknowledge-upgrade-compatibility`. Na seção Variables, configure `CARDCONTROL_CERT_SHA256` com o fingerprint exibido pelo gerador e `CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED=true`, pois o responsável confirmou que nenhum dispositivo instalou o APK anterior. O fingerprint não é segredo, mas funciona como valor de confiança para o workflow.
 
-Com os segredos configurados e os testes passando na branch `main`:
+Não copie os valores secretos para o código, logs, issues ou commits. Proteja o arquivo local com credenciais e permissões do usuário, e mantenha uma cópia offline da keystore e das senhas.
 
-**Opção A: Por Tag Git (Recomendado para versões formais):**
-```bash
-git tag v2.3.0
-git push origin v2.3.0
-```
+## Verificações automáticas
 
-**Opção B: Pelo Painel do GitHub Actions (Disparo Manual):**
-1. Acesse a aba **Actions** → selecione o workflow **Release**.
-2. Clique em **Run workflow**.
-3. Confirme a versão desejada (ex: `v2.3.0`) e dispare.
+O workflow de release falha se algum dos quatro secrets ou a variável do fingerprint estiver ausente, se a keystore/alias/senha não abrir corretamente, se o certificado não corresponder ao fingerprint confiável, ou se a assinatura do APK final não corresponder ao mesmo certificado. Não existe fallback para chave temporária.
 
-### Passo 4: Validação do Rascunho (Draft Release)
-
-1. O workflow compila o APK assinado via `./gradlew assembleRelease` e calcula o hash criptográfico SHA-256 no arquivo `SHA256SUMS.txt`.
-2. A release é criada no GitHub como **Draft (Rascunho)** para conferência humana.
-3. Inspecione o artefato, valide o hash SHA-256 (`apksigner verify --verbose CardControl-v2.3.0.apk`) e publique a release oficial.
+Depois de passar por essas verificações, o workflow cria somente uma **Draft Release** e anexa o APK e seu `SHA256SUMS.txt`. Verifique o artefato antes de qualquer publicação oficial.

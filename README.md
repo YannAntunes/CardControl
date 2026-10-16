@@ -141,7 +141,7 @@ Requer **JDK 17** ou superior e **Android SDK (API 34)** com `build-tools 34.0.0
 
 O APK de desenvolvimento será gerado em `app/build/outputs/apk/debug/app-debug.apk`.
 
-A compilação oficial de **Release** é executada exclusivamente pelo pipeline automatizado no GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)), que consome a chave rotacionada e as credenciais protegidas via segredos do repositório (`CARDCONTROL_KEYSTORE_*`), bloqueando releases se houver chaves comitadas no Git. Para gerar sua própria keystore de release fora do Git, utilize o utilitário seguro fornecido em [scripts/generate_release_keystore.ps1](scripts/generate_release_keystore.ps1) ou [scripts/generate_release_keystore.sh](scripts/generate_release_keystore.sh).
+A compilação oficial de **Release** é executada exclusivamente pelo pipeline do GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)). O workflow exige uma keystore persistente, os quatro secrets `CARDCONTROL_KEYSTORE_*` e as variables `CARDCONTROL_CERT_SHA256` e `CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED=true`; não gera chaves efêmeras e verifica a assinatura do APK. O responsável confirmou que nenhum dispositivo instalou APK assinado com a chave exposta e que a release foi retirada; a versão 2.3.0 usará uma nova identidade persistente. O workflow cria um rascunho para revisão humana, sem publicar automaticamente.
 
 | Comando | O que faz |
 | --- | --- |
@@ -193,7 +193,7 @@ O repositório possui uma suíte determinística em [SecurityAndDomainTestHarnes
 - Zero telemetria, zero servidores intermediários, zero bibliotecas de publicidade ou monitoramento.
 - O Android Manifest desativa backups em nuvem não autorizados (`android:allowBackup="false"`) e define exclusões explícitas de dados privados.
 - As permissões solicitadas são estritamente `INTERNET` (para envio opcional de relatórios por SMTP TLS caso configurado pelo usuário) e `BIND_NOTIFICATION_LISTENER_SERVICE` (para recepção de pushes).
-- A chave comprometida legada (v2.1.0) foi permanentemente revogada. O pipeline de release exige credenciais externas protegidas nos segredos do repositório e bloqueia qualquer material de assinatura rastreado no Git.
+- A chave histórica de release foi exposta no Git e foi descartada. O responsável confirmou que nenhum dispositivo instalou APK assinado com esse certificado e que a release foi retirada. A versão 2.3.0 usará uma nova identidade persistente; o workflow exige os quatro secrets e valida o fingerprint da keystore e do APK.
 - Detalhes adicionais sobre reporte responsável e modelo de ameaças em [SECURITY.md](SECURITY.md) e [docs/security/MODELO_DE_AMEACAS.md](docs/security/MODELO_DE_AMEACAS.md).
 
 ---
@@ -202,7 +202,7 @@ O repositório possui uma suíte determinística em [SecurityAndDomainTestHarnes
 
 Os lançamentos oficiais do **CardControl (v2.2.0+)** são disponibilizados na aba de [Releases do GitHub](https://github.com/kauankelvin7/CardControl/releases). Cada publicação é acompanhada por seu arquivo de verificação de integridade `SHA256SUMS.txt`.
 
-A versão v2.1.0 legada permanece permanentemente descontinuada e revogada em razão da chave histórica. Não instale nem redistribua versões anteriores a v2.2.0.
+A versão v2.1.0 legada permanece descontinuada em razão da chave histórica. Antes de distribuir uma nova versão, valide os certificados dos APKs já instalados: trocar a chave pode impedir atualizações diretas e exige uma estratégia explícita de transição.
 
 Para compilações em desenvolvimento, o APK de depuração (`CardControl-Debug-APK`) é gerado automaticamente e auditado em cada execução da suite de CI na branch `main`.
 
