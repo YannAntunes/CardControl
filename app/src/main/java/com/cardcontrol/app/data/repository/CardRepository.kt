@@ -34,7 +34,8 @@ class CardRepository(private val dao: AppDao) {
         totalLimit: Double,
         closingDay: Int,
         dueDay: Int,
-        defaultHolderId: Long?
+        defaultHolderId: Long?,
+        issuerBank: String? = null
     ) {
         dao.insertCard(
             CreditCardEntity(
@@ -43,7 +44,8 @@ class CardRepository(private val dao: AppDao) {
                 totalLimit = totalLimit.coerceAtLeast(0.0),
                 closingDay = closingDay.coerceIn(1, 28),
                 dueDay = dueDay.coerceIn(1, 28),
-                defaultHolderId = defaultHolderId
+                defaultHolderId = defaultHolderId,
+                issuerBank = issuerBank?.takeIf { it in com.cardcontrol.app.service.BankNotificationParser.SUPPORTED_ISSUERS }
             )
         )
     }

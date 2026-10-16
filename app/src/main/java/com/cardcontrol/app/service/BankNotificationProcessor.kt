@@ -58,7 +58,7 @@ class BankNotificationProcessor(
                 return@withLock AutoCaptureResult.Ignored(IgnoreReason.DUPLICATE)
             }
 
-            val card = when (val resolution = resolveCard(parsed.lastFourDigits)) {
+            val card = when (val resolution = resolveCard(BankNotificationParser.issuerFor(packageName), parsed.lastFourDigits)) {
                 is CardResolution.Found -> resolution.card
                 is CardResolution.Missing -> return@withLock AutoCaptureResult.Ignored(resolution.reason)
             }
@@ -88,17 +88,26 @@ class BankNotificationProcessor(
     }
 
     /**
-     * Com final informado, exige cartão cadastrado com o mesmo final (sem fallback para outro cartão).
-     * Sem final, só associa se houver exatamente um cartão cadastrado; caso contrário é ambíguo.
+     * Só associa quando o cartão é confirmado pelo emissor da notificação:
+     * - com final: exatamente um cartão com o mesmo final E o mesmo emissor;
+     * - sem final: exatamente um cartão cadastrado, e ele deve ser do mesmo emissor.
+     * Final existente em cartão de outro emissor/sem emissor, ou mais de um candidato, é ambíguo.
+     * Nenhum cartão com o final é "sem correspondência". Nunca escolhe cartão arbitrariamente.
      */
-    private suspend fun resolveCard(lastFour: String?): CardResolution {
+    private suspend fun resolveCard(issuer: String?, lastFour: String?): CardResolution {
+        if (issuer == null) return CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
         if (lastFour != null) {
-            val card = dao.getCardByLastFour(lastFour)
-                ?: return CardResolution.Missing(IgnoreReason.NO_MATCHING_CARD)
-            return CardResolution.Found(card)
+            val sameLastFour = dao.getCardsByLastFour(lastFour)
+            if (sameLastFour.isEmpty()) return CardResolution.Missing(IgnoreReason.NO_MATCHING_CARD)
+            val confirmed = sameLastFour.filter { it.issuerBank == issuer }
+            return when (confirmed.size) {
+                1 -> CardResolution.Found(confirmed.single())
+                else -> CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
+            }
         }
         if (dao.countCards() != 1) return CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
         val single = dao.getFirstCard() ?: return CardResolution.Missing(IgnoreReason.NO_MATCHING_CARD)
+        if (single.issuerBank != issuer) return CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
         return CardResolution.Found(single)
     }
 

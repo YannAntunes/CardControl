@@ -11,7 +11,13 @@ import com.cardcontrol.app.service.BankNotificationProcessor
 import com.cardcontrol.app.service.IgnoreReason
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,8 +40,78 @@ class BankNotificationProcessorTest {
         return dao
     }
 
-    private val cardAna = CreditCardEntity(id = 10, name = "Nu Ana", lastFourDigits = "4321", totalLimit = 5000.0, closingDay = 5, dueDay = 12, defaultHolderId = 1)
-    private val cardItau = CreditCardEntity(id = 20, name = "Itaú Ana", lastFourDigits = "9988", totalLimit = 9000.0, closingDay = 5, dueDay = 12, defaultHolderId = 1)
+    private val cardAna = CreditCardEntity(id = 10, name = "Nu Ana", lastFourDigits = "4321", totalLimit = 5000.0, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Nubank")
+    private val cardItau = CreditCardEntity(id = 20, name = "Itaú Ana", lastFourDigits = "9988", totalLimit = 9000.0, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Itaú")
+
+    @Test
+    fun `finais iguais em bancos diferentes sao associados pelo banco da notificacao`() = runBlocking {
+        val nu = cardAna.copy(id = 11, lastFourDigits = "1111")
+        val itau = cardItau.copy(id = 21, lastFourDigits = "1111")
+        val dao = daoWith(nu, itau)
+        val result = BankNotificationProcessor(dao).process(
+            "com.itau", "Itaú", "Compra aprovada no valor de R$ 80,00 em MERCADO SUL cartão final 1111.", postTime
+        )
+        assertTrue(result is AutoCaptureResult.Registered)
+        assertEquals(21L, dao.transactions.single().cardId)
+    }
+
+    @Test
+    fun `dois cartoes do mesmo banco com o mesmo final sao ambiguos e nao gravam`() = runBlocking {
+        val dao = daoWith(cardAna, cardAna.copy(id = 12, name = "Nu Ana 2"))
+        val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
+        assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
+        assertTrue(dao.transactions.isEmpty())
+        assertTrue(dao.installments.isEmpty())
+    }
+
+    @Test
+    fun `unico cartao com o final mas de outro emissor nao recebe a compra`() = runBlocking {
+        // Notificação do Nubank com final 4321; o único cartão 4321 é do Itaú.
+        val dao = daoWith(cardAna.copy(issuerBank = "Itaú"))
+        val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
+        assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
+        assertTrue(dao.transactions.isEmpty())
+    }
+
+    @Test
+    fun `cartao sem emissor confirmado nao e associado por notificacao`() = runBlocking {
+        val dao = daoWith(cardAna.copy(issuerBank = null))
+        val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
+        assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
+        assertTrue(dao.transactions.isEmpty())
+    }
+
+    @Test
+    fun `unico cartao sem final de outro emissor nao recebe a compra`() = runBlocking {
+        val dao = daoWith(cardAna.copy(issuerBank = "Itaú"))
+        val result = BankNotificationProcessor(dao).process(
+            "com.nu.production", "Compra aprovada", "Compra aprovada de R$ 25,00 em CAFE DO PONTO.", postTime
+        )
+        assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
+        assertTrue(dao.transactions.isEmpty())
+    }
+
+    @Test
+    fun `mesma notificacao submetida ao mesmo tempo por duas instancias grava uma unica serie`() = runBlocking {
+        val dao = daoWith(cardAna)
+        val text = "Compra aprovada de R$ 300,00 em LOJA ALFA em 3x cartão final 4321."
+        val results = withContext(Dispatchers.Default) {
+            val gate = CompletableDeferred<Unit>()
+            val jobs = listOf(BankNotificationProcessor(dao), BankNotificationProcessor(dao)).map { processor ->
+                async {
+                    gate.await()
+                    processor.process("com.nu.production", "Compra aprovada", text, postTime)
+                }
+            }
+            gate.complete(Unit)
+            jobs.awaitAll()
+        }
+        assertEquals(1, results.count { it is AutoCaptureResult.Registered })
+        assertEquals(1, results.count { it == AutoCaptureResult.Ignored(IgnoreReason.DUPLICATE) })
+        assertEquals(1, dao.transactions.size)
+        assertEquals(3, dao.installments.size)
+        assertTrue(dao.installments.all { it.transactionId == dao.transactions.single().id })
+    }
 
     @Test
     fun `notificacao recebida gera lancamento com banco, valor, estabelecimento, parcelas e cartao corretos`() = runBlocking {
@@ -175,7 +251,7 @@ class BankNotificationProcessorTest {
         override suspend fun getHolderById(id: Long): HolderEntity? = holders.firstOrNull { it.id == id }
         override suspend fun insertCard(card: CreditCardEntity): Long { cards += card; return card.id }
         override fun observeCards(): Flow<List<CreditCardEntity>> = flowOf(cards.toList())
-        override suspend fun getCardByLastFour(lastFour: String): CreditCardEntity? = cards.firstOrNull { it.lastFourDigits == lastFour }
+        override suspend fun getCardsByLastFour(lastFour: String): List<CreditCardEntity> = cards.filter { it.lastFourDigits == lastFour }
         override suspend fun getCardById(id: Long): CreditCardEntity? = cards.firstOrNull { it.id == id }
         override suspend fun getFirstCard(): CreditCardEntity? = cards.firstOrNull()
         override suspend fun countCards(): Int = cards.size
@@ -185,8 +261,12 @@ class BankNotificationProcessorTest {
             return id
         }
         override suspend fun insertInstallments(installments: List<InstallmentEntity>) { this.installments += installments }
-        override suspend fun countRecentDuplicate(hash: String, minTimestamp: Long): Int =
-            transactions.count { it.dedupHash == hash && it.purchaseTimestamp >= minTimestamp }
+        override suspend fun countRecentDuplicate(hash: String, minTimestamp: Long): Int {
+            val count = transactions.count { it.dedupHash == hash && it.purchaseTimestamp >= minTimestamp }
+            // Amplia a janela entre verificação e gravação: sem o lock do processador, ambas as instâncias gravariam.
+            delay(50)
+            return count
+        }
         override fun observeInstallmentsByPeriod(month: Int, year: Int): Flow<List<InstallmentEntity>> =
             flowOf(installments.filter { it.refMonth == month && it.refYear == year })
         override fun observeAllInstallments(): Flow<List<InstallmentEntity>> = flowOf(installments.toList())

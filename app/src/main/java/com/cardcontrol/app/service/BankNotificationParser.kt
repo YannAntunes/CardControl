@@ -107,6 +107,13 @@ object BankNotificationParser {
 
     fun bankNameFor(packageName: String): String? = SUPPORTED_BANKS[packageName]
 
+    /** Emissor canônico: os dois pacotes do Bradesco pertencem ao mesmo emissor. */
+    fun issuerFor(packageName: String?): String? =
+        packageName?.let { SUPPORTED_BANKS[it] }?.let { if (it == "Bradesco Cartões") "Bradesco" else it }
+
+    /** Emissores que podem ser vinculados a um cartão, na ordem de [SUPPORTED_BANKS]. */
+    val SUPPORTED_ISSUERS: List<String> get() = SUPPORTED_BANKS.keys.mapNotNull { issuerFor(it) }.distinct()
+
     fun parse(packageName: String?, title: String?, text: String?): ParsedBankExpense? {
         if (packageName == null) return null
         val bankName = SUPPORTED_BANKS[packageName] ?: return null

@@ -34,7 +34,9 @@ data class CreditCardEntity(
     val totalLimit: Double,
     val closingDay: Int,
     val dueDay: Int,
-    val defaultHolderId: Long?
+    val defaultHolderId: Long?,
+    /** Emissor canônico (ver BankNotificationParser.issuerFor). Nulo = não confirmado; nunca associado por notificação. */
+    val issuerBank: String? = null
 )
 
 @Entity(
