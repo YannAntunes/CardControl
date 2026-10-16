@@ -2,7 +2,7 @@
 
 - Data da Ãšltima Auditoria: 16 de Outubro de 2026
 - Branch ativa: `main`
-- HEAD SHA: `b98795d`
+- HEAD SHA: `14dc30d`
 - Status do Projeto: PRs #7 e #13 integrados na main; assinatura persistente configurada e validada; release pronta para execuÃ§Ã£o em Draft
 - VersÃ£o Atual: `v2.3.0` (versionCode 5)
 - VersÃ£o do banco Room: `v4` (`MIGRATION_3_4`)
