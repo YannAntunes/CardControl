@@ -49,6 +49,37 @@ class CardRepository(private val dao: AppDao) {
         )
     }
 
+    suspend fun updateCard(
+        cardId: Long,
+        name: String,
+        lastFour: String,
+        totalLimit: Long,
+        closingDay: Int,
+        dueDay: Int,
+        defaultHolderId: Long?
+    ): Boolean {
+        val existing = dao.getCardById(cardId) ?: return false
+        val safeName = SecuritySanitizer.sanitizeHeaderField(name, 40)
+        val digits = lastFour.filter { it.isDigit() }.takeLast(4)
+        if (safeName.isBlank() || digits.length != 4) return false
+        if (defaultHolderId != null && dao.getHolderById(defaultHolderId) == null) return false
+
+        val updated = existing.copy(
+            name = safeName,
+            lastFourDigits = digits,
+            totalLimit = SecuritySanitizer.validateLimitAmount(totalLimit),
+            closingDay = closingDay.coerceIn(1, 28),
+            dueDay = dueDay.coerceIn(1, 28),
+            defaultHolderId = defaultHolderId
+        )
+        return dao.updateCard(updated) > 0
+    }
+
+    suspend fun deleteCardIfUnused(cardId: Long): Boolean {
+        // A remoção é atômica e só acontece se não houver histórico financeiro vinculado.
+        return dao.deleteCardIfUnused(cardId) > 0
+    }
+
     suspend fun isDuplicateNotification(dedupHash: String, timestamp: Long): Boolean {
         if (dedupHash.isBlank()) return false
         return dao.countRecentDuplicate(dedupHash, timestamp - 120_000L) > 0
@@ -58,32 +89,36 @@ class CardRepository(private val dao: AppDao) {
         val cards = dao.getAllCardsSnapshot()
         if (cards.isEmpty()) return null
 
+        val bankKeywords = when (packageName) {
+            "com.nu.production" -> listOf("nubank", "nu ")
+            "br.com.intermedium" -> listOf("inter")
+            "com.itau", "com.itaucard.activity" -> listOf("itau", "itaú")
+            "com.c6bank.app" -> listOf("c6")
+            "com.santander.app", "br.com.santander.way" -> listOf("santander")
+            "com.bradesco", "br.com.bradesco.cartoes" -> listOf("bradesco")
+            "br.gov.caixa.cartoes" -> listOf("caixa")
+            "com.picpay" -> listOf("picpay")
+            "com.mercadopago.wallet" -> listOf("mercado", "mercadopago")
+            else -> emptyList()
+        }
+
+        fun belongsToNotifiedBank(card: CreditCardEntity): Boolean {
+            if (bankKeywords.isEmpty()) return true
+            val normalizedName = card.name.lowercase()
+            return bankKeywords.any { normalizedName.contains(it) }
+        }
+
         if (lastFourDigits != null) {
             val matchingDigits = cards.filter { it.lastFourDigits == lastFourDigits }
             if (matchingDigits.isEmpty()) return null
-            if (matchingDigits.size == 1) return matchingDigits.first()
-
-            val bankKeywords = when (packageName) {
-                "com.nu.production" -> listOf("nu", "nubank")
-                "br.com.intermedium" -> listOf("inter")
-                "com.itau", "com.itaucard.activity" -> listOf("itau", "itaú")
-                "com.c6bank.app" -> listOf("c6")
-                "com.santander.app", "br.com.santander.way" -> listOf("santander")
-                "com.bradesco", "br.com.bradesco.cartoes" -> listOf("bradesco")
-                "br.gov.caixa.cartoes" -> listOf("caixa")
-                "com.picpay" -> listOf("picpay")
-                "com.mercadopago.wallet" -> listOf("mercado", "mercadopago")
-                else -> emptyList()
-            }
-
-            val matchingBank = matchingDigits.filter { card ->
-                val cardNameLower = card.name.lowercase()
-                bankKeywords.any { cardNameLower.contains(it) }
-            }
-            return matchingBank.singleOrNull()
-        } else {
-            return cards.singleOrNull()
+            // Mesmo um único cartão deve corresponder ao banco que originou a notificação.
+            return matchingDigits.filter(::belongsToNotifiedBank).singleOrNull()
         }
+
+        // Sem os quatro dígitos, só resolvemos quando existe um único cartão e ele é compatível
+        // com o banco de origem. Havendo ambiguidade, não lançamos uma compra no titular errado.
+        val onlyCard = cards.singleOrNull() ?: return null
+        return onlyCard.takeIf(::belongsToNotifiedBank)
     }
 
     suspend fun processBankNotification(

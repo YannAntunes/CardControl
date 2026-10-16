@@ -43,6 +43,20 @@ private class FakeAppDao : AppDao {
     override fun observeCards(): Flow<List<CreditCardEntity>> = synchronized(cards) { flowOf(cards.toList()) }
     override suspend fun getAllCardsSnapshot(): List<CreditCardEntity> = synchronized(cards) { cards.toList() }
     override suspend fun getCardById(id: Long): CreditCardEntity? = synchronized(cards) { cards.find { it.id == id } }
+    override suspend fun updateCard(card: CreditCardEntity): Int = synchronized(cards) {
+        val index = cards.indexOfFirst { it.id == card.id }
+        if (index < 0) 0 else {
+            cards[index] = card
+            1
+        }
+    }
+    override suspend fun deleteCardIfUnused(id: Long): Int {
+        val hasTransactions = synchronized(transactions) { transactions.any { it.cardId == id } }
+        val hasInstallments = synchronized(installments) { installments.any { it.cardId == id } }
+        val hasPayments = synchronized(payments) { payments.any { it.cardId == id } }
+        if (hasTransactions || hasInstallments || hasPayments) return 0
+        return synchronized(cards) { if (cards.removeAll { it.id == id }) 1 else 0 }
+    }
 
     override suspend fun insertTransaction(tx: TransactionEntity): Long = synchronized(transactions) {
         transactions.add(tx)
@@ -551,4 +565,109 @@ class SecurityAndDomainTestHarness {
         assertNotNull(card3)
         assertEquals("DROGARIA CENTRAL", fakeDao.transactions.last().merchant)
     }
+
+    @Test
+    fun `harness deve permitir corrigir cartao e trocar pessoa vinculada`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.holders.add(
+            HolderEntity(id = 2L, name = "Jheymison", whatsapp = "", email = "", subLimit = 200000L)
+        )
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Inter",
+                lastFourDigits = "0359",
+                totalLimit = 500000L,
+                closingDay = 9,
+                dueDay = 15,
+                defaultHolderId = null
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+        val updated = repo.updateCard(
+            cardId = 1L,
+            name = "Inter Platinum",
+            lastFour = "0359",
+            totalLimit = 750000L,
+            closingDay = 8,
+            dueDay = 16,
+            defaultHolderId = 2L
+        )
+
+        assertTrue(updated)
+        val saved = fakeDao.getCardById(1L)
+        assertEquals("Inter Platinum", saved?.name)
+        assertEquals(2L, saved?.defaultHolderId)
+        assertEquals(750000L, saved?.totalLimit)
+        assertEquals(8, saved?.closingDay)
+        assertEquals(16, saved?.dueDay)
+    }
+
+    @Test
+    fun `harness deve impedir exclusao de cartao com historico financeiro`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Nubank",
+                lastFourDigits = "4321",
+                totalLimit = 500000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+        fakeDao.transactions.add(
+            TransactionEntity(id = 10L, cardId = 1L, holderId = 1L, merchant = "Mercado", totalAmount = 1200L)
+        )
+
+        val deleted = CardRepository(fakeDao).deleteCardIfUnused(1L)
+
+        assertFalse(deleted)
+        assertNotNull(fakeDao.getCardById(1L))
+    }
+
+    @Test
+    fun `harness deve excluir cartao sem movimentacoes`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Inter",
+                lastFourDigits = "0359",
+                totalLimit = 500000L,
+                closingDay = 9,
+                dueDay = 15,
+                defaultHolderId = null
+            )
+        )
+
+        val deleted = CardRepository(fakeDao).deleteCardIfUnused(1L)
+
+        assertTrue(deleted)
+        assertNull(fakeDao.getCardById(1L))
+    }
+
+    @Test
+    fun `harness deve conferir o banco mesmo quando o final do cartao e unico`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Inter Platinum",
+                lastFourDigits = "0359",
+                totalLimit = 500000L,
+                closingDay = 9,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+
+        assertNull(repo.resolveCardForNotification("com.nu.production", "0359"))
+        assertEquals(1L, repo.resolveCardForNotification("br.com.intermedium", "0359")?.id)
+    }
+
 }

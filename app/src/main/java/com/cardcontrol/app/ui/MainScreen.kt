@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -26,9 +27,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.cardcontrol.app.data.local.CreditCardEntity
 import com.cardcontrol.app.ui.theme.*
 import com.cardcontrol.app.util.MoneyUtils
 import com.cardcontrol.app.util.ReportEngine
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun GlassTextField(
@@ -78,6 +81,8 @@ fun MainScreen(
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
     var expandedHolderId by remember { mutableStateOf<Long?>(null) }
+    var cardBeingEdited by remember { mutableStateOf<CreditCardEntity?>(null) }
+    var cardPendingDeletion by remember { mutableStateOf<CreditCardEntity?>(null) }
 
     var showExpenseDialog by remember { mutableStateOf(false) }
     var showPaymentDialog by remember { mutableStateOf(false) }
@@ -86,6 +91,12 @@ fun MainScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showSavedMessage by remember { mutableStateOf(false) }
+
+    LaunchedEffect(viewModel) {
+        viewModel.uiMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     LaunchedEffect(showSavedMessage) {
         if (showSavedMessage) {
@@ -161,6 +172,17 @@ fun MainScreen(
                             text = { Text("Lançar Compra", fontWeight = FontWeight.Bold) }
                         )
                     }
+                } else if (selectedTab == 1) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            cardBeingEdited = null
+                            showCardDialog = true
+                        },
+                        containerColor = GlassPalette.CyanGlow,
+                        contentColor = GlassPalette.ObsidianBg,
+                        icon = { Icon(Icons.Default.AddCard, contentDescription = null) },
+                        text = { Text("Adicionar cartão", fontWeight = FontWeight.Bold) }
+                    )
                 }
             }
         ) { padding ->
@@ -200,7 +222,10 @@ fun MainScreen(
                                 Text("Pessoa", fontWeight = FontWeight.SemiBold)
                             }
                             OutlinedButton(
-                                onClick = { showCardDialog = true },
+                                onClick = {
+                                    cardBeingEdited = null
+                                    showCardDialog = true
+                                },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = GlassPalette.TextPrimary)
@@ -310,40 +335,152 @@ fun MainScreen(
                     }
 
                     1 -> {
-                        if (state.cards.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 16.dp)
-                                    .liquidGlassSurface(cornerRadius = 22.dp, accentTint = GlassPalette.IndigoGlow)
-                                    .padding(22.dp)
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(top = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                                    Icon(Icons.Default.AddCard, null, tint = GlassPalette.IndigoGlow, modifier = Modifier.size(42.dp))
-                                    Spacer(Modifier.height(8.dp))
-                                    Text("Nenhum Cartão Cadastrado", fontWeight = FontWeight.Bold, color = GlassPalette.TextPrimary)
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("Toque no botão 'Cartão' na aba Faturas para adicionar seu primeiro cartão com fechamento e vencimento.", style = MaterialTheme.typography.bodySmall, color = GlassPalette.TextSecondary, textAlign = TextAlign.Center)
-                                }
+                                Text(
+                                    "Seus cartões",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GlassPalette.TextPrimary
+                                )
+                                Text(
+                                    if (state.cards.size == 1) "1 cartão cadastrado"
+                                    else "${state.cards.size} cartões cadastrados",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = GlassPalette.TextSecondary
+                                )
                             }
-                        } else {
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
-                                items(state.cardSummaries, key = { it.card.id }) { item ->
-                                    val ratio = if (item.card.totalLimit > 0L) (item.globalCommitted.toFloat() / item.card.totalLimit.toFloat()) else 0f
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .liquidGlassSurface(cornerRadius = 22.dp, accentTint = GlassPalette.IndigoGlow)
-                                            .padding(18.dp)
+
+                            if (state.cards.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .liquidGlassSurface(cornerRadius = 22.dp, accentTint = GlassPalette.IndigoGlow)
+                                        .padding(22.dp)
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth().align(Alignment.Center)
                                     ) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                Text(item.card.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = GlassPalette.TextPrimary)
-                                                Text("•••• ${item.card.lastFourDigits}", style = MaterialTheme.typography.titleSmall, color = GlassPalette.CyanGlow)
+                                        Icon(Icons.Default.AddCard, null, tint = GlassPalette.IndigoGlow, modifier = Modifier.size(42.dp))
+                                        Text("Nenhum cartão por aqui", fontWeight = FontWeight.Bold, color = GlassPalette.TextPrimary)
+                                        Text(
+                                            "Cadastre um cartão, escolha a pessoa responsável e acompanhe o limite disponível nesta tela.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = GlassPalette.TextSecondary,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        OutlinedButton(
+                                            onClick = {
+                                                cardBeingEdited = null
+                                                showCardDialog = true
+                                            },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = GlassPalette.TextPrimary)
+                                        ) {
+                                            Icon(Icons.Default.Add, contentDescription = null)
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("Cadastrar cartão")
+                                        }
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    contentPadding = PaddingValues(top = 2.dp, bottom = 104.dp)
+                                ) {
+                                    items(state.cardSummaries, key = { it.card.id }) { item ->
+                                        val ratio = if (item.card.totalLimit > 0L) {
+                                            (item.globalCommitted.toFloat() / item.card.totalLimit.toFloat()).coerceIn(0f, 1f)
+                                        } else 0f
+                                        val linkedHolder = state.holders.firstOrNull { it.id == item.card.defaultHolderId }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .liquidGlassSurface(cornerRadius = 22.dp, accentTint = GlassPalette.IndigoGlow)
+                                                .padding(18.dp)
+                                        ) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                        Text(
+                                                            item.card.name,
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = GlassPalette.TextPrimary
+                                                        )
+                                                        Text(
+                                                            "•••• ${item.card.lastFourDigits}",
+                                                            style = MaterialTheme.typography.titleSmall,
+                                                            color = GlassPalette.CyanGlow
+                                                        )
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            cardBeingEdited = item.card
+                                                            showCardDialog = true
+                                                        }
+                                                    ) {
+                                                        Icon(Icons.Default.Edit, contentDescription = "Editar cartão ${item.card.name}", tint = GlassPalette.CyanGlow)
+                                                    }
+                                                    IconButton(
+                                                        onClick = { cardPendingDeletion = item.card }
+                                                    ) {
+                                                        Icon(Icons.Default.Delete, contentDescription = "Excluir cartão ${item.card.name}", tint = GlassPalette.CoralDanger)
+                                                    }
+                                                }
+
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Icon(
+                                                        Icons.Default.Person,
+                                                        contentDescription = null,
+                                                        tint = if (linkedHolder == null) GlassPalette.AmberWarn else GlassPalette.CyanGlow,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Text(
+                                                        linkedHolder?.name?.let { "Pessoa vinculada: $it" } ?: "Nenhuma pessoa vinculada",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = if (linkedHolder == null) GlassPalette.AmberWarn else GlassPalette.TextSecondary
+                                                    )
+                                                }
+
+                                                Text(
+                                                    "Fecha dia ${item.card.closingDay} • Vence dia ${item.card.dueDay}",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = GlassPalette.TextSecondary
+                                                )
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("Disponível", style = MaterialTheme.typography.labelMedium, color = GlassPalette.TextSecondary)
+                                                    Text(
+                                                        ReportEngine.formatCurrency(item.availableLimit),
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = GlassPalette.EmeraldAccent
+                                                    )
+                                                }
+                                                LiquidGlassBar(progress = ratio, accentColor = GlassPalette.IndigoGlow)
+                                                Text(
+                                                    "Limite total: ${ReportEngine.formatCurrency(item.card.totalLimit)}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = GlassPalette.TextSecondary
+                                                )
                                             }
-                                            Text("Fecha dia ${item.card.closingDay} • Vence dia ${item.card.dueDay}", style = MaterialTheme.typography.labelMedium, color = GlassPalette.TextSecondary)
-                                            Text("Disponível Real: ${ReportEngine.formatCurrency(item.availableLimit)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = GlassPalette.EmeraldAccent)
-                                            LiquidGlassBar(progress = ratio, accentColor = GlassPalette.IndigoGlow)
                                         }
                                     }
                                 }
@@ -433,7 +570,13 @@ fun MainScreen(
         var amount by remember { mutableStateOf("") }
         var parcels by remember { mutableStateOf("1") }
         var selectedCardId by remember { mutableLongStateOf(state.cards.first().id) }
-        var selectedHolderId by remember { mutableLongStateOf(state.holders.first().id) }
+        var selectedHolderId by remember {
+            mutableLongStateOf(
+                state.cards.first().defaultHolderId
+                    ?.takeIf { holderId -> state.holders.any { it.id == holderId } }
+                    ?: state.holders.first().id
+            )
+        }
 
         AlertDialog(
             onDismissRequest = { showExpenseDialog = false },
@@ -457,7 +600,9 @@ fun MainScreen(
                             selectedId = selectedCardId,
                             onSelect = { cardId ->
                                 selectedCardId = cardId
-                                state.cards.find { it.id == cardId }?.defaultHolderId?.let { selectedHolderId = it }
+                                selectedHolderId = state.cards.find { it.id == cardId }?.defaultHolderId
+                                    ?.takeIf { holderId -> state.holders.any { it.id == holderId } }
+                                    ?: state.holders.first().id
                             }
                         )
                     }
@@ -668,64 +813,121 @@ fun MainScreen(
         )
     }
 
+    if (cardPendingDeletion != null) {
+        val pendingCard = cardPendingDeletion!!
+        AlertDialog(
+            onDismissRequest = { cardPendingDeletion = null },
+            containerColor = GlassPalette.DeepSlateBg,
+            titleContentColor = GlassPalette.TextPrimary,
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = GlassPalette.CoralDanger)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Excluir cartão?", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    "O cartão \"${pendingCard.name}\" só será excluído se não tiver compras, parcelas ou pagamentos vinculados. Assim, o histórico financeiro não será apagado por engano.",
+                    color = GlassPalette.TextSecondary
+                )
+            },
+            dismissButton = {
+                TextButton(onClick = { cardPendingDeletion = null }) {
+                    Text("Cancelar", color = GlassPalette.TextSecondary)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteCard(pendingCard.id)
+                        cardPendingDeletion = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GlassPalette.CoralDanger),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Excluir cartão", color = GlassPalette.TextPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     if (showCardDialog) {
-        var name by remember { mutableStateOf("") }
-        var lastFour by remember { mutableStateOf("") }
-        var limit by remember { mutableStateOf("") }
-        var closing by remember { mutableStateOf("10") }
-        var due by remember { mutableStateOf("17") }
-        var defaultHolderId by remember { mutableStateOf(state.holders.firstOrNull()?.id) }
+        val cardToEdit = cardBeingEdited
+        var name by remember(cardToEdit?.id) { mutableStateOf(cardToEdit?.name ?: "") }
+        var lastFour by remember(cardToEdit?.id) { mutableStateOf(cardToEdit?.lastFourDigits ?: "") }
+        var limit by remember(cardToEdit?.id) {
+            mutableStateOf(cardToEdit?.totalLimit?.let { MoneyUtils.formatDecimal(it) } ?: "")
+        }
+        var closing by remember(cardToEdit?.id) { mutableStateOf(cardToEdit?.closingDay?.toString() ?: "10") }
+        var due by remember(cardToEdit?.id) { mutableStateOf(cardToEdit?.dueDay?.toString() ?: "17") }
+        var defaultHolderId by remember(cardToEdit?.id) {
+            mutableStateOf(if (cardToEdit != null) cardToEdit.defaultHolderId else state.holders.firstOrNull()?.id)
+        }
+        var formError by remember(cardToEdit?.id) { mutableStateOf<String?>(null) }
 
         AlertDialog(
-            onDismissRequest = { showCardDialog = false },
+            onDismissRequest = {
+                showCardDialog = false
+                cardBeingEdited = null
+            },
             containerColor = GlassPalette.DeepSlateBg,
             titleContentColor = GlassPalette.TextPrimary,
             shape = RoundedCornerShape(24.dp),
             modifier = Modifier.border(1.dp, GlassPalette.SpecularHighlight, RoundedCornerShape(24.dp)),
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AddCard, null, tint = GlassPalette.IndigoGlow)
+                    Icon(Icons.Default.CreditCard, null, tint = GlassPalette.IndigoGlow)
                     Spacer(Modifier.width(8.dp))
-                    Text("Novo Cartão", fontWeight = FontWeight.Bold)
+                    Text(if (cardToEdit == null) "Novo cartão" else "Editar cartão", fontWeight = FontWeight.Bold)
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (state.holders.isNotEmpty()) {
-                        Text("Titular Padrão (Automação Push):", style = MaterialTheme.typography.labelMedium, color = GlassPalette.TextSecondary)
-                        Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                            LiquidPillSelector(options = state.holders.map { it.id to it.name }, selectedId = defaultHolderId, onSelect = { defaultHolderId = it })
-                        }
-                    }
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "Banco e identificação",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = GlassPalette.CyanGlow
+                    )
                     GlassTextField(
                         value = name,
-                        onValueChange = { name = it },
-                        label = "Apelido do Cartão",
-                        placeholder = "Ex: Nubank Adicional",
+                        onValueChange = { name = it; formError = null },
+                        label = "Banco / apelido do cartão",
+                        placeholder = "Ex.: Inter Platinum",
                         leadingIcon = { Icon(Icons.Default.CreditCard, null, tint = GlassPalette.IndigoGlow) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                     )
+                    Text(
+                        "Inclua o nome do banco no apelido para ajudar a identificar as notificações de compra.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = GlassPalette.TextSecondary
+                    )
                     GlassTextField(
                         value = lastFour,
-                        onValueChange = { lastFour = it },
-                        label = "Últimos 4 Dígitos",
-                        placeholder = "Ex: 4321",
+                        onValueChange = { value -> lastFour = value.filter { it.isDigit() }.takeLast(4); formError = null },
+                        label = "Últimos 4 dígitos",
+                        placeholder = "Ex.: 0359",
                         leadingIcon = { Icon(Icons.Default.Pin, null, tint = GlassPalette.CyanGlow) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
                     )
                     GlassTextField(
                         value = limit,
-                        onValueChange = { limit = it },
-                        label = "Limite Total do Cartão (R$)",
-                        placeholder = "Ex: 5000,00",
+                        onValueChange = { limit = it; formError = null },
+                        label = "Limite total (R$)",
+                        placeholder = "Ex.: 5000,00",
                         leadingIcon = { Icon(Icons.Default.AttachMoney, null, tint = GlassPalette.EmeraldAccent) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         GlassTextField(
                             value = closing,
-                            onValueChange = { closing = it },
-                            label = "Fechamento (1-28)",
+                            onValueChange = { closing = it; formError = null },
+                            label = "Fechamento (1–28)",
                             placeholder = "10",
                             leadingIcon = { Icon(Icons.Default.CalendarToday, null, tint = GlassPalette.TextSecondary) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
@@ -733,41 +935,94 @@ fun MainScreen(
                         )
                         GlassTextField(
                             value = due,
-                            onValueChange = { due = it },
-                            label = "Vencimento (1-28)",
+                            onValueChange = { due = it; formError = null },
+                            label = "Vencimento (1–28)",
                             placeholder = "17",
                             leadingIcon = { Icon(Icons.Default.Event, null, tint = GlassPalette.TextSecondary) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                             modifier = Modifier.weight(1f)
                         )
                     }
+
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.12f), modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        "Pessoa responsável",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = GlassPalette.CyanGlow
+                    )
+                    Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        LiquidPillSelector(
+                            options = listOf(0L to "Sem vínculo") + state.holders.map { it.id to it.name },
+                            selectedId = defaultHolderId ?: 0L,
+                            onSelect = { selected -> defaultHolderId = selected.takeIf { it != 0L }; formError = null }
+                        )
+                    }
+                    Text(
+                        "Essa pessoa será usada nas compras capturadas automaticamente. Os lançamentos antigos não mudam.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = GlassPalette.TextSecondary
+                    )
+                    if (formError != null) {
+                        Text(formError!!, style = MaterialTheme.typography.bodySmall, color = GlassPalette.CoralDanger)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCardDialog = false }) {
+                TextButton(
+                    onClick = {
+                        showCardDialog = false
+                        cardBeingEdited = null
+                    }
+                ) {
                     Text("Cancelar", color = GlassPalette.TextSecondary)
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (name.isNotBlank() && lastFour.isNotBlank()) {
-                            val limitCents = MoneyUtils.parseToCents(limit) ?: 0L
-                            viewModel.addCard(
-                                name = name,
-                                lastFour = lastFour,
-                                limit = limitCents,
-                                closing = closing.toIntOrNull() ?: 10,
-                                due = due.toIntOrNull() ?: 17,
-                                defaultHolderId = defaultHolderId
-                            )
+                        val digits = lastFour.filter { it.isDigit() }.takeLast(4)
+                        val limitCents = MoneyUtils.parseToCents(limit)
+                        val closingDay = closing.toIntOrNull()
+                        val dueDay = due.toIntOrNull()
+                        if (
+                            name.isBlank() ||
+                            digits.length != 4 ||
+                            limitCents == null ||
+                            closingDay == null || closingDay !in 1..28 ||
+                            dueDay == null || dueDay !in 1..28
+                        ) {
+                            formError = "Confira o apelido, os quatro dígitos, o limite e as datas."
+                        } else {
+                            val holderId = defaultHolderId?.takeIf { id -> state.holders.any { it.id == id } }
+                            if (cardToEdit == null) {
+                                viewModel.addCard(
+                                    name = name,
+                                    lastFour = digits,
+                                    limit = limitCents,
+                                    closing = closingDay,
+                                    due = dueDay,
+                                    defaultHolderId = holderId
+                                )
+                            } else {
+                                viewModel.updateCard(
+                                    id = cardToEdit.id,
+                                    name = name,
+                                    lastFour = digits,
+                                    limit = limitCents,
+                                    closing = closingDay,
+                                    due = dueDay,
+                                    defaultHolderId = holderId
+                                )
+                            }
                             showCardDialog = false
+                            cardBeingEdited = null
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = GlassPalette.IndigoGlow),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Salvar", color = GlassPalette.TextPrimary, fontWeight = FontWeight.Bold)
+                    Text(if (cardToEdit == null) "Cadastrar cartão" else "Salvar alterações", color = GlassPalette.TextPrimary, fontWeight = FontWeight.Bold)
                 }
             }
         )
