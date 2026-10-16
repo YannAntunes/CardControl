@@ -4,20 +4,20 @@ import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-ZIP_NAME = "CardControl_v2_1.zip"
+ZIP_NAME = "CardControl_v2_2.zip"
 
 EXCLUDED_DIRS = {
     ".git", ".gradle", "build", ".idea", ".agent", "captures",
-    "dist", ".system_generated", ".cxx", ".externalNativeBuild"
+    "dist", ".system_generated", ".cxx", ".externalNativeBuild", "temp_keystore"
 }
 
 EXCLUDED_EXTS = {
-    ".keystore", ".jks", ".apk", ".aab", ".hprof", ".pyc", ".log", ".bak", ".swp"
+    ".keystore", ".jks", ".p12", ".apk", ".aab", ".hprof", ".pyc", ".log", ".bak", ".swp"
 }
 
 EXCLUDED_FILES = {
     "local.properties", "keystore.properties", "key.properties", "secrets.properties",
-    ".DS_Store", "Thumbs.db"
+    "release-credentials.txt", "release-secrets.env", ".DS_Store", "Thumbs.db"
 }
 
 def should_include(file_path: Path) -> bool:

@@ -15,9 +15,13 @@ captures/
 # Signing material and credentials must stay outside version control
 *.keystore
 *.jks
+*.p12
 keystore.properties
 key.properties
 secrets.properties
+release-credentials.txt
+release-secrets.env
+temp_keystore/
 
 # Distribution binaries are published through GitHub Releases
 *.apk

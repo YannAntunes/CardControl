@@ -1,20 +1,65 @@
-# Release signing
+# Procedimento Operacional: Assinatura e Publicação de Releases (v2.2.0+)
 
-The key previously stored at `app/release.keystore` and the passwords committed in the Gradle file must be treated as compromised. Do not reuse them. The repository change removes the tracked key and hard-coded signing configuration. Debug builds use Android's generated debug key; release signing is intentionally disabled until a replacement signing plan is completed.
+## 1. Contexto de Segurança e Revogação
 
-## Before the next release
+A chave legada anteriormente presente em `app/release.keystore` e as senhas comitadas no histórico inicial foram declaradas como permanentemente comprometidas e revogadas.
 
-1. Decide how existing installations will receive updates. A new Android signing key will not update APKs signed with the old key unless the distribution channel supports a signing-key upgrade. For Google Play, verify Play App Signing and its key-upgrade process first.
-2. Generate a new keystore in a private location outside this repository and keep an offline backup.
-3. Store the new signing data in GitHub Actions repository secrets under Settings → Secrets and variables → Actions: `CARDCONTROL_KEYSTORE_BASE64`, `CARDCONTROL_KEYSTORE_PASSWORD`, `CARDCONTROL_KEY_ALIAS`, and `CARDCONTROL_KEY_PASSWORD`.
-4. Update the Gradle release configuration to consume the replacement keystore and credentials from environment variables or ignored local configuration. Do not commit the keystore, passwords, or local signing properties.
-5. Test the signed APK's certificate and checksum, then test the update path on a device before publishing.
+Para a versão **v2.2.0 em diante**, o CardControl aplica as seguintes diretrizes inegociáveis:
+- Proibição de armazenamento de qualquer `.keystore`, `.jks` ou segredo dentro do repositório Git.
+- Gradle configurado para carregar credenciais estritamente via variáveis de ambiente (`CARDCONTROL_KEYSTORE_*`) ou `local.properties` ignorado.
+- Workflow do GitHub Actions (`.github/workflows/release.yml`) com validação de segurança que bloqueia a publicação se arquivos de keystore estiverem rastreados pelo Git ou se senhas forem identificadas no código.
 
-The tag-release workflow currently blocks publication while the replacement Gradle signing configuration and secrets are incomplete. Keep releases blocked until these steps are finished; the workflow creates draft releases for human review.
+---
 
-Removing the keystore from the current tree does not remove copies from prior commits, forks, clones, or caches. Rotation is still required. Rewriting public history to purge the old binary and passwords changes commit IDs and cannot recall copies already made.
+## 2. Passo a Passo para Gerar Nova Chave e Publicar Release
 
-## Repository settings still required
+### Passo 1: Gerar a Keystore de Produção de Forma Segura
 
-- Under Settings → Rules → Rulesets, create an active ruleset targeting `main`. Require pull requests and the `Unit tests`, `Android Lint`, and `Analyze Kotlin and Java` checks before merging. Block force pushes and branch deletion.
-- Enable the Dependency Graph under Settings → Code security and analysis, then set repository variable `DEPENDENCY_GRAPH_ENABLED=true` so the current Dependency Review and Dependency Submission workflows run instead of being skipped.
+Utilize o utilitário incluído no repositório. Ele cria o par de chaves RSA 2048 bits com validade de 10.000 dias, extrai o Fingerprint SHA-256 e gera o Base64 sem salvar credenciais no Git:
+
+**No Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/generate_release_keystore.ps1
+```
+
+**No Linux / macOS (Bash):**
+```bash
+chmod +x scripts/generate_release_keystore.sh
+./scripts/generate_release_keystore.sh
+```
+
+> [!IMPORTANT]
+> Faça um backup físico e offline seguro do arquivo `cardcontrol-release.jks`. Se essa chave for perdida, não será possível atualizar diretamente instalações pré-existentes.
+
+### Passo 2: Configurar os Segredos no GitHub Actions
+
+O script PowerShell oferece opção de cadastrar automaticamente os segredos via GitHub CLI (`gh`). Caso prefira configurar manualmente, acesse no GitHub:
+**Settings → Secrets and variables → Actions** e crie os 4 Repository Secrets:
+
+| Nome do Segredo | Descrição |
+| :--- | :--- |
+| `CARDCONTROL_KEYSTORE_BASE64` | Conteúdo do arquivo `.jks` codificado em string Base64 |
+| `CARDCONTROL_KEYSTORE_PASSWORD` | Senha de abertura da keystore |
+| `CARDCONTROL_KEY_ALIAS` | Alias da chave (padrão: `cardcontrol`) |
+| `CARDCONTROL_KEY_PASSWORD` | Senha da chave privada |
+
+### Passo 3: Disparar o Workflow de Release
+
+Com os segredos configurados e os testes passando na branch `main`:
+
+**Opção A: Por Tag Git (Recomendado para versões formais):**
+```bash
+git tag v2.2.0
+git push origin v2.2.0
+```
+
+**Opção B: Pelo Painel do GitHub Actions (Disparo Manual):**
+1. Acesse a aba **Actions** → selecione o workflow **Release**.
+2. Clique em **Run workflow**.
+3. Confirme a versão desejada (ex: `v2.2.0`) e dispare.
+
+### Passo 4: Validação do Rascunho (Draft Release)
+
+1. O workflow compila o APK assinado via `./gradlew assembleRelease` e calcula o hash criptográfico SHA-256 no arquivo `SHA256SUMS.txt`.
+2. A release é criada no GitHub como **Draft (Rascunho)** para conferência humana.
+3. Inspecione o artefato, valide o hash SHA-256 (`apksigner verify --verbose CardControl-v2.2.0.apk`) e publique a release oficial.

@@ -5,6 +5,7 @@
   Totalmente offline, com divisão exata de centavos e cofre criptografado no dispositivo.
 </p>
 
+
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026%2B)-3DDC84?logo=android&logoColor=white">
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?logo=kotlin&logoColor=white">
@@ -128,39 +129,42 @@ Caso o usuário configure envio de e-mails para dependentes, a senha de aplicati
 
 ## Como compilar e executar
 
-Requer **JDK 17** e **Android SDK (API 34)** com `build-tools 34.0.0`.
+Requer **JDK 17** ou superior e **Android SDK (API 34)** com `build-tools 34.0.0`.
 
 ```bash
-# Compilar e executar a suíte de testes unitários
+# Executar a suíte completa de testes unitários
 ./gradlew testDebugUnitTest
 
-# Compilar o APK de desenvolvimento
+# Compilar o APK de desenvolvimento (Debug)
 ./gradlew assembleDebug
 ```
 
-O APK de desenvolvimento será gerado em `app/build/outputs/apk/debug/app-debug.apk`. A assinatura de release está **desativada** enquanto a chave comprometida não for substituída e a estratégia de atualização validada. Não distribua um artefato de release gerado localmente.
+O APK de desenvolvimento será gerado em `app/build/outputs/apk/debug/app-debug.apk`.
+
+A compilação oficial de **Release** é executada exclusivamente pelo pipeline automatizado no GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)), que consome a chave rotacionada e as credenciais protegidas via segredos do repositório (`CARDCONTROL_KEYSTORE_*`), bloqueando releases se houver chaves comitadas no Git. Para gerar sua própria keystore de release fora do Git, utilize o utilitário seguro fornecido em [scripts/generate_release_keystore.ps1](scripts/generate_release_keystore.ps1) ou [scripts/generate_release_keystore.sh](scripts/generate_release_keystore.sh).
 
 | Comando | O que faz |
 | --- | --- |
-| `./gradlew testDebugUnitTest` | Executa todas as asserções de segurança e domínio |
-| `./gradlew assembleDebug` | Compila o APK de desenvolvimento |
-| `./gradlew assembleRelease` | O release permanece sem assinatura configurada até a rotação da chave; não distribuir |
-| `apksigner verify --verbose <apk>` | Valida as assinaturas v1 e v2 do binário gerado |
+| `./gradlew testDebugUnitTest` | Executa todas as asserções de segurança, domínio e concorrência |
+| `./gradlew assembleDebug` | Compila o APK de desenvolvimento assinado com a chave debug padrão do SDK |
+| `./gradlew assembleRelease` | Compila o APK de produção caso as variáveis de assinatura de release estejam configuradas |
+| `apksigner verify --verbose <apk>` | Valida as assinaturas criptográficas v1 e v2 do binário gerado |
 
 ---
 
 ## Testes e verificação
 
-O repositório possui uma suíte determinística em `app/src/test/java/com/cardcontrol/app/SecurityAndDomainTestHarness.kt`.
+O repositório possui uma suíte determinística em [SecurityAndDomainTestHarness.kt](app/src/test/java/com/cardcontrol/app/SecurityAndDomainTestHarness.kt) e testes de empacotamento em [test_bundle_canary.py](scripts/test_bundle_canary.py).
 
 | Teste | O que valida |
 | --- | --- |
 | **Path Traversal** | Garante que nomes de titulares maliciosos não escapem da pasta de cache de PDFs |
 | **Injeção CRLF** | Valida que quebras de linha em nomes de estabelecimentos não injetem cabeçalhos SMTP |
 | **Filtro de Notificações** | Comprova a rejeição de mensagens de estorno, compras negadas e pacotes não bancários |
-| **Resiliência a ReDoS** | Verifica o truncamento de entradas excessivas antes da execução de Regex |
-| **Precisão de Centavos** | Valida a conservação exata da soma em parcelamentos ímpares |
+| **Resiliência a ReDoS** | Verifica o truncamento de entradas excessivas antes da execução de expressões regulares |
+| **Precisão de Centavos** | Valida a conservação exata da soma em centavos (`Long`) em parcelamentos ímpares |
 | **Virada de Ano** | Testa o avanço de competência da fatura quando compras ocorrem após o fechamento de dezembro |
+| **Bloqueio de Canários** | Valida que 28 arquivos sensíveis (chaves, senhas, `.env`, caches) sejam excluídos do empacotamento |
 
 ---
 
@@ -168,39 +172,42 @@ O repositório possui uma suíte determinística em `app/src/test/java/com/cardc
 
 | Caminho | Responsabilidade |
 | --- | --- |
-| `app/src/main/java/.../data/` | Entidades Room, AppDao, AppDatabase e CardRepository |
-| `app/src/main/java/.../service/` | BankNotificationListener e BankNotificationParser |
-| `app/src/main/java/.../security/` | Sanitização de strings e validações de segurança |
-| `app/src/main/java/.../ui/` | ViewModel, telas Compose e componentes Liquid Glass |
+| `app/src/main/java/.../data/` | Entidades Room v3, AppDao, AppDatabase e CardRepository com Mutex atômico |
+| `app/src/main/java/.../service/` | BankNotificationListener e BankNotificationParser com deduplicação SHA-256 |
+| `app/src/main/java/.../security/` | Sanitização contra CRLF, Path Traversal e limites de payload |
+| `app/src/main/java/.../ui/` | ViewModel, telas Compose e componentes do design system Liquid Glass |
 | `app/src/test/` | Suíte de testes unitários do harness de domínio e segurança |
-| `dist/` | Aviso de retirada da distribuição v2.1.0; não contém APK autorizado para distribuição |
+| `app/schemas/` | Esquemas do banco Room SQLite exportados via KSP com histórico de migração |
 | `docs/architecture/` | Documentação arquitetural e contratos técnicos |
 | `docs/guides/` | Tutoriais de configuração de permissões no Android 13/14 |
-| `docs/security/` | Modelo de ameaças e mapeamento de controles |
-| `scripts/` | Utilitários de automação e empacotamento de código |
+| `docs/security/` | Modelo de ameaças e mapeamento de controles de defesa |
+| `scripts/` | Utilitários de empacotamento seguro e geração de keystore de release |
 | `.agent/` | Estado de engenharia, tarefas e planos executáveis para agentes de IA |
-| `.github/workflows/` | Pipelines de CI e publicação automatizada de releases |
+| `.agents/` | Configurações dos 4 subagentes especializados e Agent Skills modulares |
+| `.github/workflows/` | Pipelines de CI/CD, CodeQL, lint e publicação automatizada de releases |
 
 ---
 
 ## Segurança e privacidade
 
-- Dados financeiros residem exclusivamente no SQLite privado do aplicativo.
-- Zero telemetria, zero bibliotecas de terceiros de publicidade ou monitoramento.
+- Dados financeiros residem exclusivamente no SQLite privado do aplicativo (`card_control_offline.db`).
+- Zero telemetria, zero servidores intermediários, zero bibliotecas de publicidade ou monitoramento.
 - O Android Manifest desativa backups em nuvem não autorizados (`android:allowBackup="false"`) e define exclusões explícitas de dados privados.
-- As permissões solicitadas são estritamente `INTERNET` (para envio opcional de SMTP TLS caso configurado) e `BIND_NOTIFICATION_LISTENER_SERVICE` (para recepção de pushes).
-- A chave de assinatura de release e as senhas anteriormente versionadas devem ser consideradas comprometidas e não podem ser reutilizadas.
-- Detalhes adicionais sobre reporte responsável e modelo de ameaças em [SECURITY.md](SECURITY.md) e [`docs/security/MODELO_DE_AMEACAS.md`](docs/security/MODELO_DE_AMEACAS.md).
+- As permissões solicitadas são estritamente `INTERNET` (para envio opcional de relatórios por SMTP TLS caso configurado pelo usuário) e `BIND_NOTIFICATION_LISTENER_SERVICE` (para recepção de pushes).
+- A chave comprometida legada (v2.1.0) foi permanentemente revogada. O pipeline de release exige credenciais externas protegidas nos segredos do repositório e bloqueia qualquer material de assinatura rastreado no Git.
+- Detalhes adicionais sobre reporte responsável e modelo de ameaças em [SECURITY.md](SECURITY.md) e [docs/security/MODELO_DE_AMEACAS.md](docs/security/MODELO_DE_AMEACAS.md).
 
 ---
 
 ## Distribuição e instalação
 
-A distribuição do APK está suspensa por incidente de segurança. O APK v2.1.0 e seu checksum foram removidos da árvore atual do Git; consulte o [aviso de retirada](dist/README.md). A página Releases do GitHub ainda exige retirada manual, e cópias antigas podem continuar disponíveis em clones, forks e caches.
+Os lançamentos oficiais do **CardControl (v2.2.0+)** são disponibilizados na aba de [Releases do GitHub](https://github.com/kauankelvin7/CardControl/releases). Cada publicação é acompanhada por seu arquivo de verificação de integridade `SHA256SUMS.txt`.
 
-Não instale nem compartilhe artefatos da v2.1.0. Novos releases dependem de uma nova chave, credenciais externas ao Git, validação da assinatura e testes de atualização em dispositivo.
+A versão v2.1.0 legada permanece permanentemente descontinuada e revogada em razão da chave histórica. Não instale nem redistribua versões anteriores a v2.2.0.
 
-Para configurar as permissões de leitura de notificações, consulte [`docs/guides/CONFIGURACAO_E_PERMISSOES.md`](docs/guides/CONFIGURACAO_E_PERMISSOES.md).
+Para compilações em desenvolvimento, o APK de depuração (`CardControl-Debug-APK`) é gerado automaticamente e auditado em cada execução da suite de CI na branch `main`.
+
+Para configurar as permissões de leitura de notificações no Android, consulte [docs/guides/CONFIGURACAO_E_PERMISSOES.md](docs/guides/CONFIGURACAO_E_PERMISSOES.md).
 
 ---
 

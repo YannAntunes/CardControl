@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Versão/Tag do release (ex: v2.2.0)"
+        required: false
+        default: "v2.2.0"
 
 permissions:
   contents: write
@@ -73,12 +79,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#v}"
+          raw_tag="${{ github.event.inputs.tag_name || github.ref_name }}"
+          tag_version="${raw_tag#v}"
           app_version="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
           if [[ -z "$app_version" || "$tag_version" != "$app_version" ]]; then
-            echo "::error::Release tag ($tag_version) does not match app/build.gradle.kts versionName ($app_version)."
+            echo "::error::Release tag/version ($tag_version) does not match app/build.gradle.kts versionName ($app_version)."
             exit 1
           fi
+          echo "RELEASE_TAG_NAME=$raw_tag" >> "$GITHUB_ENV"
 
       - name: Make Gradle Wrapper executable
         run: chmod +x gradlew
@@ -102,21 +110,22 @@ jobs:
           apk_path="app/build/outputs/apk/release/app-release.apk"
           test -s "$apk_path"
           mkdir -p "$RUNNER_TEMP/release-assets"
-          release_apk="$RUNNER_TEMP/release-assets/CardControl-${GITHUB_REF_NAME}.apk"
+          release_apk="$RUNNER_TEMP/release-assets/CardControl-${RELEASE_TAG_NAME}.apk"
           cp "$apk_path" "$release_apk"
           (
             cd "$RUNNER_TEMP/release-assets"
-            sha256sum "CardControl-${GITHUB_REF_NAME}.apk" > SHA256SUMS.txt
+            sha256sum "CardControl-${RELEASE_TAG_NAME}.apk" > SHA256SUMS.txt
           )
 
       - name: Create draft GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          name: "CardControl ${{ github.ref_name }}"
+          tag_name: ${{ env.RELEASE_TAG_NAME }}
+          name: "CardControl ${{ env.RELEASE_TAG_NAME }}"
           draft: true
           prerelease: false
           body: |
-            ## CardControl ${{ github.ref_name }}
+            ## CardControl ${{ env.RELEASE_TAG_NAME }}
 
             This draft was built from the tagged commit by GitHub Actions.
 
@@ -133,5 +142,5 @@ jobs:
             ### 🔒 Verificação de Integridade
             - Verifique o hash SHA-256 no arquivo anexo `SHA256SUMS.txt` ou com `apksigner verify`.
           files: |
-            ${{ runner.temp }}/release-assets/CardControl-${{ github.ref_name }}.apk
+            ${{ runner.temp }}/release-assets/CardControl-${{ env.RELEASE_TAG_NAME }}.apk
             ${{ runner.temp }}/release-assets/SHA256SUMS.txt

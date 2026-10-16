@@ -53,6 +53,10 @@ def run_canary_test():
             root / "dist" / "app-v2.1.0.apk",
             root / "hs_err_pid1234.log",
             root / "replay_pid5678.log",
+            root / "temp_keystore" / "cardcontrol-release.jks",
+            root / "release-credentials.txt",
+            root / "release-secrets.env",
+            root / "app" / "cert.p12",
             root / ".DS_Store",
             root / "Thumbs.db"
         ]
@@ -89,7 +93,7 @@ def run_canary_test():
             rel = canary.relative_to(root).as_posix()
             assert rel not in names, f"ALERTA DE SEGURANCA: Arquivo canario sensivel '{rel}' vazou no ZIP!"
 
-        print("[TEST] SUCESSO: Todos os 24 arquivos-canario sensiveis foram bloqueados!")
+        print(f"[TEST] SUCESSO: Todos os {len(canary_files)} arquivos-canario sensiveis foram bloqueados!")
 
 if __name__ == "__main__":
     run_canary_test()
