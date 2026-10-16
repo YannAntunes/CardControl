@@ -57,9 +57,16 @@ jobs:
           CARDCONTROL_KEYSTORE_PASSWORD: ${{ secrets.CARDCONTROL_KEYSTORE_PASSWORD }}
           CARDCONTROL_KEY_ALIAS: ${{ secrets.CARDCONTROL_KEY_ALIAS }}
           CARDCONTROL_KEY_PASSWORD: ${{ secrets.CARDCONTROL_KEY_PASSWORD }}
+          CARDCONTROL_CERT_SHA256: ${{ vars.CARDCONTROL_CERT_SHA256 }}
+          CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED: ${{ vars.CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED }}
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ "${CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED:-}" != "true" ]]; then
+            echo "::error::Release blocked: set CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED=true only after documenting and validating the installed-APK signing transition."
+            exit 1
+          fi
 
           if git ls-files --error-unmatch app/release.keystore >/dev/null 2>&1; then
             echo "::error::Release blocked: app/release.keystore is still tracked. Complete key remediation first."
@@ -78,43 +85,75 @@ jobs:
             fi
           done
 
-          key_path="$RUNNER_TEMP/cardcontrol-release.keystore"
+          for secret_name in CARDCONTROL_KEYSTORE_BASE64 CARDCONTROL_KEYSTORE_PASSWORD CARDCONTROL_KEY_ALIAS CARDCONTROL_KEY_PASSWORD; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "::error::Release blocked: required repository secret $secret_name is not configured."
+              exit 1
+            fi
+          done
 
-          if [[ -n "${CARDCONTROL_KEYSTORE_BASE64:-}" && -n "${CARDCONTROL_KEYSTORE_PASSWORD:-}" && -n "${CARDCONTROL_KEY_ALIAS:-}" && -n "${CARDCONTROL_KEY_PASSWORD:-}" ]]; then
-            echo "::notice::Using rotated signing credentials configured in repository secrets."
-            printf '%s' "$CARDCONTROL_KEYSTORE_BASE64" | base64 --decode > "$key_path"
-            actual_store_pass="$CARDCONTROL_KEYSTORE_PASSWORD"
-            actual_key_alias="$CARDCONTROL_KEY_ALIAS"
-            actual_key_pass="$CARDCONTROL_KEY_PASSWORD"
-          else
-            echo "::notice::Repository secrets not configured; generating signing credentials dynamically via scripts/generate_release_keystore.sh."
-            chmod +x scripts/generate_release_keystore.sh
-            gen_dir="$RUNNER_TEMP/generated_keystore"
-            ./scripts/generate_release_keystore.sh "$gen_dir" "cardcontrol"
-            cp "$gen_dir/cardcontrol-release.jks" "$key_path"
-            set +u
-            source "$gen_dir/release-secrets.env"
-            set -u
-            actual_store_pass="$CARDCONTROL_KEYSTORE_PASSWORD"
-            actual_key_alias="$CARDCONTROL_KEY_ALIAS"
-            actual_key_pass="$CARDCONTROL_KEY_PASSWORD"
+          if [[ -z "${CARDCONTROL_CERT_SHA256:-}" ]]; then
+            echo "::error::Release blocked: repository variable CARDCONTROL_CERT_SHA256 is missing."
+            exit 1
           fi
 
+          key_path="$RUNNER_TEMP/cardcontrol-release.keystore"
+          printf '%s' "$CARDCONTROL_KEYSTORE_BASE64" | base64 --decode > "$key_path"
           test -s "$key_path"
           chmod 600 "$key_path"
 
+          if ! cert_details="$(keytool -list -v -keystore "$key_path" -alias "$CARDCONTROL_KEY_ALIAS" -storepass:env CARDCONTROL_KEYSTORE_PASSWORD 2>&1)"; then
+            echo "::error::Release blocked: keystore cannot be opened with the configured alias/password."
+            exit 1
+          fi
+          actual_fingerprint="$(printf '%s\n' "$cert_details" | sed -nE 's/.*SHA256: ([[:xdigit:]:]+).*/\1/p' | head -n 1 | tr -d ':')"
+          expected_fingerprint="$(printf '%s' "$CARDCONTROL_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          actual_fingerprint="$(printf '%s' "$actual_fingerprint" | tr '[:lower:]' '[:upper:]')"
+          if [[ -z "$actual_fingerprint" || "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+            echo "::error::Release blocked: signing certificate fingerprint does not match CARDCONTROL_CERT_SHA256."
+            exit 1
+          fi
+          echo "::notice::Signing certificate fingerprint matches the trusted repository variable."
+
           {
             echo "CARDCONTROL_KEYSTORE_PATH=$key_path"
-            echo "CARDCONTROL_KEYSTORE_PASSWORD=$actual_store_pass"
-            echo "CARDCONTROL_KEY_ALIAS=$actual_key_alias"
-            echo "CARDCONTROL_KEY_PASSWORD=$actual_key_pass"
+            echo "CARDCONTROL_KEYSTORE_PASSWORD=$CARDCONTROL_KEYSTORE_PASSWORD"
+            echo "CARDCONTROL_KEY_ALIAS=$CARDCONTROL_KEY_ALIAS"
+            echo "CARDCONTROL_KEY_PASSWORD=$CARDCONTROL_KEY_PASSWORD"
+            echo "CARDCONTROL_CERT_SHA256=$CARDCONTROL_CERT_SHA256"
           } >> "$GITHUB_ENV"
+
 
       - name: Set up Gradle and validate the Wrapper
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6
 
       - name: Build signed release APK
         run: ./gradlew assembleRelease --no-daemon --console=plain --max-workers=2 -Pkotlin.compiler.execution.strategy=in-process
+
+      - name: Verify APK signature and trusted certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_path="app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk_path"
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -n "$sdk_root" ]]; then
+            apksigner_path="$(find "$sdk_root/build-tools" -type f -name apksigner 2>/dev/null | sort -V | tail -n 1)"
+          else
+            apksigner_path="$(command -v apksigner || true)"
+          fi
+          if [[ -z "$apksigner_path" || ! -x "$apksigner_path" ]]; then
+            echo "::error::Release blocked: apksigner was not found in the Android SDK."
+            exit 1
+          fi
+          signature_details="$("$apksigner_path" verify --verbose --print-certs "$apk_path" 2>&1)"
+          actual_fingerprint="$(printf '%s\n' "$signature_details" | sed -nE 's/^Signer #1 certificate SHA-256 digest: ([[:xdigit:]:]+).*$/\1/p' | head -n 1 | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          expected_fingerprint="$(printf '%s' "$CARDCONTROL_CERT_SHA256" | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          if [[ -z "$actual_fingerprint" || "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+            echo "::error::Release blocked: APK signer fingerprint does not match CARDCONTROL_CERT_SHA256."
+            exit 1
+          fi
+          echo "::notice::APK signature verified against the trusted certificate fingerprint."
 
       - name: Prepare APK and checksum
         shell: bash
@@ -150,7 +189,7 @@ jobs:
             - **Design System Liquid Glass:** Interface escura fluida (Obsidian/DeepSlate) com Adaptive Icons e teclados especializados (numérico, decimal, telefone e e-mail).
             - **Precisão Contábil Canônica:** Manipulação 100% inteira em centavos (`Long`) sem erros de ponto flutuante e cálculo automático de corte de faturas (`closingDay`).
             - **Segurança Reforçada:** Criptografia no chip de hardware via Android Keystore (`AES256-GCM`), bloqueio de backup e sanitização rigorosa de entradas.
-            - **Distribuição Direta:** Assinatura dedicada v2 (`CN=CardControl`) permitindo atualizações diretas no Android sem perda de dados.
+            - **Assinatura:** O APK é verificado contra um fingerprint SHA-256 confiável. Compatibilidade com instalações anteriores precisa ser validada separadamente antes da publicação.
 
             ### 🔒 Verificação de Integridade
             - Verifique o hash SHA-256 no arquivo anexo `SHA256SUMS.txt` ou com `apksigner verify`.
