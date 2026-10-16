@@ -125,15 +125,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addHolder(name: String, whatsapp: String, email: String, subLimit: Long) {
         viewModelScope.launch { repository.addHolder(name, whatsapp, email, subLimit) }
     }
-    fun addCard(name: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?) {
+    fun addCard(name: String, bank: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?) {
         viewModelScope.launch {
-            repository.addCard(name, lastFour, limit, closing, due, defaultHolderId)
+            repository.addCard(name, bank, lastFour, limit, closing, due, defaultHolderId)
             _uiMessages.emit("Cartão cadastrado.")
         }
     }
-    fun updateCard(id: Long, name: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?) {
+    fun updateCard(id: Long, name: String, bank: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?) {
         viewModelScope.launch {
-            val updated = repository.updateCard(id, name, lastFour, limit, closing, due, defaultHolderId)
+            val updated = repository.updateCard(id, name, bank, lastFour, limit, closing, due, defaultHolderId)
             _uiMessages.emit(
                 if (updated) "Alterações do cartão salvas."
                 else "Não foi possível salvar. Confira os dados e a pessoa vinculada."

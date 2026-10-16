@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cardcontrol.app.data.local.CreditCardEntity
+import com.cardcontrol.app.data.local.SupportedBank
 import com.cardcontrol.app.ui.theme.*
 import com.cardcontrol.app.util.MoneyUtils
 import com.cardcontrol.app.util.ReportEngine
@@ -415,6 +416,7 @@ fun MainScreen(
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                        val bankInfo = SupportedBank.fromId(item.card.bank)
                                                         Text(
                                                             item.card.name,
                                                             style = MaterialTheme.typography.titleMedium,
@@ -422,7 +424,7 @@ fun MainScreen(
                                                             color = GlassPalette.TextPrimary
                                                         )
                                                         Text(
-                                                            "•••• ${item.card.lastFourDigits}",
+                                                            "${bankInfo.displayName} •••• ${item.card.lastFourDigits}",
                                                             style = MaterialTheme.typography.titleSmall,
                                                             color = GlassPalette.CyanGlow
                                                         )
@@ -855,7 +857,12 @@ fun MainScreen(
 
     if (showCardDialog) {
         val cardToEdit = cardBeingEdited
-        var name by remember(cardToEdit?.id) { mutableStateOf(cardToEdit?.name ?: "") }
+        var selectedBank by remember(cardToEdit?.id) {
+            mutableStateOf(if (cardToEdit != null) SupportedBank.fromId(cardToEdit.bank) else SupportedBank.NUBANK)
+        }
+        var name by remember(cardToEdit?.id) {
+            mutableStateOf(cardToEdit?.name ?: SupportedBank.NUBANK.displayName)
+        }
         var lastFour by remember(cardToEdit?.id) { mutableStateOf(cardToEdit?.lastFourDigits ?: "") }
         var limit by remember(cardToEdit?.id) {
             mutableStateOf(cardToEdit?.totalLimit?.let { MoneyUtils.formatDecimal(it) } ?: "")
@@ -889,7 +896,34 @@ fun MainScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Banco e identificação",
+                        "Banco emissor",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = GlassPalette.CyanGlow
+                    )
+                    Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        LiquidPillSelector(
+                            options = SupportedBank.entries.map { it.id to it.displayName },
+                            selectedId = selectedBank.id,
+                            onSelect = { bankId ->
+                                val previousBank = selectedBank
+                                val newBank = SupportedBank.fromId(bankId)
+                                selectedBank = newBank
+                                if (cardToEdit == null && (name.isBlank() || name == previousBank.displayName)) {
+                                    name = if (newBank != SupportedBank.OTHER) newBank.displayName else ""
+                                }
+                                formError = null
+                            }
+                        )
+                    }
+                    Text(
+                        "Identifica a origem das notificações bancárias para captura automática.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = GlassPalette.TextSecondary
+                    )
+
+                    Text(
+                        "Identificação do cartão",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = GlassPalette.CyanGlow
@@ -897,13 +931,13 @@ fun MainScreen(
                     GlassTextField(
                         value = name,
                         onValueChange = { name = it; formError = null },
-                        label = "Banco / apelido do cartão",
-                        placeholder = "Ex.: Inter Platinum",
+                        label = "Apelido do cartão",
+                        placeholder = "Ex.: Meu Cartão Principal",
                         leadingIcon = { Icon(Icons.Default.CreditCard, null, tint = GlassPalette.IndigoGlow) },
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                     )
                     Text(
-                        "Inclua o nome do banco no apelido para ajudar a identificar as notificações de compra.",
+                        "Você pode dar o apelido que preferir. A captura automática continuará funcionando.",
                         style = MaterialTheme.typography.bodySmall,
                         color = GlassPalette.TextSecondary
                     )
@@ -998,6 +1032,7 @@ fun MainScreen(
                             if (cardToEdit == null) {
                                 viewModel.addCard(
                                     name = name,
+                                    bank = selectedBank.id,
                                     lastFour = digits,
                                     limit = limitCents,
                                     closing = closingDay,
@@ -1008,6 +1043,7 @@ fun MainScreen(
                                 viewModel.updateCard(
                                     id = cardToEdit.id,
                                     name = name,
+                                    bank = selectedBank.id,
                                     lastFour = digits,
                                     limit = limitCents,
                                     closing = closingDay,

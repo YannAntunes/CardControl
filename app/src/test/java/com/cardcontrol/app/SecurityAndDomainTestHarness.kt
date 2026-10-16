@@ -2,6 +2,7 @@ package com.cardcontrol.app
 
 import com.cardcontrol.app.data.local.AppDao
 import com.cardcontrol.app.data.local.CreditCardEntity
+import com.cardcontrol.app.data.local.SupportedBank
 import com.cardcontrol.app.data.local.HolderEntity
 import com.cardcontrol.app.data.local.InstallmentEntity
 import com.cardcontrol.app.data.local.PaymentEntity
@@ -656,6 +657,7 @@ class SecurityAndDomainTestHarness {
             CreditCardEntity(
                 id = 1L,
                 name = "Inter Platinum",
+                bank = "inter",
                 lastFourDigits = "0359",
                 totalLimit = 500000L,
                 closingDay = 9,
@@ -668,6 +670,151 @@ class SecurityAndDomainTestHarness {
 
         assertNull(repo.resolveCardForNotification("com.nu.production", "0359"))
         assertEquals(1L, repo.resolveCardForNotification("br.com.intermedium", "0359")?.id)
+    }
+
+    @Test
+    fun `harness deve reconhecer cartao renomeado usando o campo explicito bank`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.holders.add(
+            HolderEntity(id = 1L, name = "Kauan", whatsapp = "", email = "", subLimit = 500000L)
+        )
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 10L,
+                name = "Meu Cartao Pessoal e Viagem", // Nome customizado SEM a palavra 'nubank'
+                bank = "nubank",
+                lastFourDigits = "4321",
+                totalLimit = 500000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+
+        // Resolução direta
+        val resolved = repo.resolveCardForNotification("com.nu.production", "4321")
+        assertNotNull(resolved)
+        assertEquals(10L, resolved?.id)
+        assertEquals("Meu Cartao Pessoal e Viagem", resolved?.name)
+        assertEquals("nubank", resolved?.bank)
+
+        // Processamento de ponta a ponta
+        val (txId, matchedCard) = repo.processBankNotification(
+            packageName = "com.nu.production",
+            title = "Compra no cartão aprovada",
+            text = "Compra aprovada de R$ 85,50 em PADARIA CENTRAL final 4321",
+            timestamp = 1700000000000L
+        )
+        assertTrue(txId > 0L)
+        assertNotNull(matchedCard)
+        assertEquals(10L, matchedCard?.id)
+        assertEquals(8550L, fakeDao.transactions.last().totalAmount)
+    }
+
+    @Test
+    fun `harness deve desambiguar cartoes de bancos diferentes com os mesmos quatro digitos`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Cartao Titular",
+                bank = "nubank",
+                lastFourDigits = "9999",
+                totalLimit = 300000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 2L,
+                name = "Cartao Secundario",
+                bank = "inter",
+                lastFourDigits = "9999",
+                totalLimit = 400000L,
+                closingDay = 10,
+                dueDay = 20,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+
+        val nuMatch = repo.resolveCardForNotification("com.nu.production", "9999")
+        val interMatch = repo.resolveCardForNotification("br.com.intermedium", "9999")
+        val itauMatch = repo.resolveCardForNotification("com.itau", "9999")
+
+        assertNotNull(nuMatch)
+        assertEquals(1L, nuMatch?.id)
+
+        assertNotNull(interMatch)
+        assertEquals(2L, interMatch?.id)
+
+        assertNull(itauMatch)
+    }
+
+    @Test
+    fun `harness deve manter fallback para cartoes legados com bank other inferindo pelo nome`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 5L,
+                name = "Nubank Ultravioleta",
+                bank = "other", // Simula registro legado pré-migração
+                lastFourDigits = "8888",
+                totalLimit = 1000000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+        val matched = repo.resolveCardForNotification("com.nu.production", "8888")
+        assertNotNull(matched)
+        assertEquals(5L, matched?.id)
+    }
+
+    @Test
+    fun `harness deve persistir e atualizar o campo explicito bank no repositorio`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        val repo = CardRepository(fakeDao)
+
+        repo.addCard(
+            name = "Corporativo",
+            bank = "c6",
+            lastFour = "7777",
+            totalLimit = 800000L,
+            closingDay = 10,
+            dueDay = 20,
+            defaultHolderId = null
+        )
+
+        val inserted = fakeDao.cards.firstOrNull()
+        assertNotNull(inserted)
+        assertEquals("Corporativo", inserted?.name)
+        assertEquals("c6", inserted?.bank)
+        assertEquals("7777", inserted?.lastFourDigits)
+
+        val updated = repo.updateCard(
+            cardId = inserted!!.id,
+            name = "Corporativo C6 Carbon",
+            bank = "c6",
+            lastFour = "7777",
+            totalLimit = 900000L,
+            closingDay = 12,
+            dueDay = 22,
+            defaultHolderId = null
+        )
+
+        assertTrue(updated)
+        val refreshed = fakeDao.getCardById(inserted.id)
+        assertEquals("Corporativo C6 Carbon", refreshed?.name)
+        assertEquals("c6", refreshed?.bank)
+        assertEquals(900000L, refreshed?.totalLimit)
     }
 
 }

@@ -172,7 +172,7 @@ O repositório possui uma suíte determinística em [SecurityAndDomainTestHarnes
 
 | Caminho | Responsabilidade |
 | --- | --- |
-| `app/src/main/java/.../data/` | Entidades Room v3, AppDao, AppDatabase e CardRepository com Mutex atômico |
+| `app/src/main/java/.../data/` | Entidades Room v4, AppDao, AppDatabase e CardRepository com Mutex atômico |
 | `app/src/main/java/.../service/` | BankNotificationListener e BankNotificationParser com deduplicação SHA-256 |
 | `app/src/main/java/.../security/` | Sanitização contra CRLF, Path Traversal e limites de payload |
 | `app/src/main/java/.../ui/` | ViewModel, telas Compose e componentes do design system Liquid Glass |
@@ -182,8 +182,7 @@ O repositório possui uma suíte determinística em [SecurityAndDomainTestHarnes
 | `docs/guides/` | Tutoriais de configuração de permissões no Android 13/14 |
 | `docs/security/` | Modelo de ameaças e mapeamento de controles de defesa |
 | `scripts/` | Utilitários de empacotamento seguro e geração de keystore de release |
-| `.agent/` | Estado de engenharia, tarefas e planos executáveis para agentes de IA |
-| `.agents/` | Configurações dos 4 subagentes especializados e Agent Skills modulares |
+| `.agents/` | Configurações de subagentes, skills modulares e artefatos de governança de IA |
 | `.github/workflows/` | Pipelines de CI/CD, CodeQL, lint e publicação automatizada de releases |
 
 ---

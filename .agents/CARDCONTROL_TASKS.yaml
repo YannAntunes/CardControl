@@ -1,4 +1,4 @@
-version: "2.2.0"
+version: "2.3.0"
 project: "CardControl"
 engine: "Android Native (Kotlin + Compose + Room)"
 
@@ -58,6 +58,20 @@ tasks:
     owner: "DevOps / Security"
     dependencies: ["TASK-006", "TASK-010"]
     verification: "test_bundle_canary.py (28 canários PASS), bump v2.2.0, release.yml workflow_dispatch e documentação alinhada"
+
+  - id: "TASK-012"
+    title: "Identificação explícita de banco emissor, migração Room v4 e desacoplamento da captura automática de compras de cartões renomeados"
+    status: "COMPLETED"
+    owner: "Core Data / UI / Security"
+    dependencies: ["TASK-010"]
+    verification: "MIGRATION_3_4, KSP schema 4.json, SecurityAndDomainTestHarness assertions (100% PASS), lintDebug e assembleDebug"
+
+  - id: "TASK-013"
+    title: "Unificação da governança em .agents, adequação de Graphify, Context Mode e Ponytail e auditoria de estado Leve"
+    status: "COMPLETED"
+    owner: "DevOps / Governance"
+    dependencies: ["TASK-011", "TASK-012"]
+    verification: "check_state.ps1 (100% PASS), eliminação da pasta .agent, instalação de graphifyy e context-mode"
 
   - id: "TASK-008"
     title: "Detecção e conciliação automática de Pix recebido para abatimento"

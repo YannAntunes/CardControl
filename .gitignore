@@ -42,3 +42,6 @@ hs_err_pid*
 replay_pid*
 __pycache__/
 *.pyc
+
+# Tooling and session artifacts
+.github/context-mode/

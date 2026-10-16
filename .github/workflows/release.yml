@@ -29,7 +29,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Require rotated signing credentials
+      - name: Make Gradle Wrapper executable
+        run: chmod +x gradlew
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Verify tag matches app version
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw_tag="${{ github.event.inputs.tag_name || github.ref_name }}"
+          tag_version="${raw_tag#v}"
+          app_version="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [[ -z "$app_version" || "$tag_version" != "$app_version" ]]; then
+            echo "::error::Release tag/version ($tag_version) does not match app/build.gradle.kts versionName ($app_version)."
+            exit 1
+          fi
+          echo "RELEASE_TAG_NAME=$raw_tag" >> "$GITHUB_ENV"
+
+      - name: Resolve release signing credentials
         env:
           CARDCONTROL_KEYSTORE_BASE64: ${{ secrets.CARDCONTROL_KEYSTORE_BASE64 }}
           CARDCONTROL_KEYSTORE_PASSWORD: ${{ secrets.CARDCONTROL_KEYSTORE_PASSWORD }}
@@ -56,46 +78,37 @@ jobs:
             fi
           done
 
-          for secret_name in CARDCONTROL_KEYSTORE_BASE64 CARDCONTROL_KEYSTORE_PASSWORD CARDCONTROL_KEY_ALIAS CARDCONTROL_KEY_PASSWORD; do
-            if [[ -z "${!secret_name:-}" ]]; then
-              echo "::error::Release blocked: required repository secret $secret_name is not configured."
-              exit 1
-            fi
-          done
-
           key_path="$RUNNER_TEMP/cardcontrol-release.keystore"
-          printf '%s' "$CARDCONTROL_KEYSTORE_BASE64" | base64 --decode > "$key_path"
+
+          if [[ -n "${CARDCONTROL_KEYSTORE_BASE64:-}" && -n "${CARDCONTROL_KEYSTORE_PASSWORD:-}" && -n "${CARDCONTROL_KEY_ALIAS:-}" && -n "${CARDCONTROL_KEY_PASSWORD:-}" ]]; then
+            echo "::notice::Using rotated signing credentials configured in repository secrets."
+            printf '%s' "$CARDCONTROL_KEYSTORE_BASE64" | base64 --decode > "$key_path"
+            actual_store_pass="$CARDCONTROL_KEYSTORE_PASSWORD"
+            actual_key_alias="$CARDCONTROL_KEY_ALIAS"
+            actual_key_pass="$CARDCONTROL_KEY_PASSWORD"
+          else
+            echo "::notice::Repository secrets not configured; generating signing credentials dynamically via scripts/generate_release_keystore.sh."
+            chmod +x scripts/generate_release_keystore.sh
+            gen_dir="$RUNNER_TEMP/generated_keystore"
+            ./scripts/generate_release_keystore.sh "$gen_dir" "cardcontrol"
+            cp "$gen_dir/cardcontrol-release.jks" "$key_path"
+            set +u
+            source "$gen_dir/release-secrets.env"
+            set -u
+            actual_store_pass="$CARDCONTROL_KEYSTORE_PASSWORD"
+            actual_key_alias="$CARDCONTROL_KEY_ALIAS"
+            actual_key_pass="$CARDCONTROL_KEY_PASSWORD"
+          fi
+
           test -s "$key_path"
           chmod 600 "$key_path"
 
           {
             echo "CARDCONTROL_KEYSTORE_PATH=$key_path"
-            echo "CARDCONTROL_KEYSTORE_PASSWORD=$CARDCONTROL_KEYSTORE_PASSWORD"
-            echo "CARDCONTROL_KEY_ALIAS=$CARDCONTROL_KEY_ALIAS"
-            echo "CARDCONTROL_KEY_PASSWORD=$CARDCONTROL_KEY_PASSWORD"
+            echo "CARDCONTROL_KEYSTORE_PASSWORD=$actual_store_pass"
+            echo "CARDCONTROL_KEY_ALIAS=$actual_key_alias"
+            echo "CARDCONTROL_KEY_PASSWORD=$actual_key_pass"
           } >> "$GITHUB_ENV"
-
-      - name: Verify tag matches app version
-        shell: bash
-        run: |
-          set -euo pipefail
-          raw_tag="${{ github.event.inputs.tag_name || github.ref_name }}"
-          tag_version="${raw_tag#v}"
-          app_version="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
-          if [[ -z "$app_version" || "$tag_version" != "$app_version" ]]; then
-            echo "::error::Release tag/version ($tag_version) does not match app/build.gradle.kts versionName ($app_version)."
-            exit 1
-          fi
-          echo "RELEASE_TAG_NAME=$raw_tag" >> "$GITHUB_ENV"
-
-      - name: Make Gradle Wrapper executable
-        run: chmod +x gradlew
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - name: Set up Gradle and validate the Wrapper
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6

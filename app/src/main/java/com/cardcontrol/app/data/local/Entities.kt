@@ -25,11 +25,12 @@ data class HolderEntity(
             onDelete = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index("defaultHolderId"), Index("lastFourDigits")]
+    indices = [Index("defaultHolderId"), Index("lastFourDigits"), Index("bank")]
 )
 data class CreditCardEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
+    val bank: String = SupportedBank.OTHER.id,
     val lastFourDigits: String,
     val totalLimit: Long,
     val closingDay: Int,

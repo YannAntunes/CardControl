@@ -31,15 +31,18 @@ class CardRepository(private val dao: AppDao) {
 
     suspend fun addCard(
         name: String,
+        bank: String = SupportedBank.OTHER.id,
         lastFour: String,
         totalLimit: Long,
         closingDay: Int,
         dueDay: Int,
         defaultHolderId: Long?
     ) {
+        val safeBank = SupportedBank.fromId(bank).id
         dao.insertCard(
             CreditCardEntity(
                 name = SecuritySanitizer.sanitizeHeaderField(name, 40),
+                bank = safeBank,
                 lastFourDigits = lastFour.filter { it.isDigit() }.takeLast(4),
                 totalLimit = SecuritySanitizer.validateLimitAmount(totalLimit),
                 closingDay = closingDay.coerceIn(1, 28),
@@ -52,6 +55,7 @@ class CardRepository(private val dao: AppDao) {
     suspend fun updateCard(
         cardId: Long,
         name: String,
+        bank: String = SupportedBank.OTHER.id,
         lastFour: String,
         totalLimit: Long,
         closingDay: Int,
@@ -64,8 +68,10 @@ class CardRepository(private val dao: AppDao) {
         if (safeName.isBlank() || digits.length != 4) return false
         if (defaultHolderId != null && dao.getHolderById(defaultHolderId) == null) return false
 
+        val safeBank = SupportedBank.fromId(bank).id
         val updated = existing.copy(
             name = safeName,
+            bank = safeBank,
             lastFourDigits = digits,
             totalLimit = SecuritySanitizer.validateLimitAmount(totalLimit),
             closingDay = closingDay.coerceIn(1, 28),
@@ -89,23 +95,19 @@ class CardRepository(private val dao: AppDao) {
         val cards = dao.getAllCardsSnapshot()
         if (cards.isEmpty()) return null
 
-        val bankKeywords = when (packageName) {
-            "com.nu.production" -> listOf("nubank", "nu ")
-            "br.com.intermedium" -> listOf("inter")
-            "com.itau", "com.itaucard.activity" -> listOf("itau", "itaú")
-            "com.c6bank.app" -> listOf("c6")
-            "com.santander.app", "br.com.santander.way" -> listOf("santander")
-            "com.bradesco", "br.com.bradesco.cartoes" -> listOf("bradesco")
-            "br.gov.caixa.cartoes" -> listOf("caixa")
-            "com.picpay" -> listOf("picpay")
-            "com.mercadopago.wallet" -> listOf("mercado", "mercadopago")
-            else -> emptyList()
-        }
+        val notifiedBank = SupportedBank.fromPackageName(packageName)
 
         fun belongsToNotifiedBank(card: CreditCardEntity): Boolean {
-            if (bankKeywords.isEmpty()) return true
-            val normalizedName = card.name.lowercase()
-            return bankKeywords.any { normalizedName.contains(it) }
+            if (notifiedBank == SupportedBank.OTHER) return false
+
+            // 1. Prioridade absoluta: campo explícito do banco
+            val cardBank = SupportedBank.fromId(card.bank)
+            if (cardBank != SupportedBank.OTHER) {
+                return cardBank == notifiedBank
+            }
+
+            // 2. Fallback de compatibilidade retroativa para cartões legados sem banco explícito
+            return SupportedBank.inferFromCardName(card.name) == notifiedBank
         }
 
         if (lastFourDigits != null) {

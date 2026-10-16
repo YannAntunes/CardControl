@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         InstallmentEntity::class,
         PaymentEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -65,13 +65,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `credit_cards` ADD COLUMN `bank` TEXT NOT NULL DEFAULT 'other'")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_credit_cards_bank` ON `credit_cards` (`bank`)")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'nubank' WHERE lower(`name`) LIKE '%nubank%' OR lower(`name`) LIKE '%nu %'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'inter' WHERE lower(`name`) LIKE '%inter%'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'itau' WHERE lower(`name`) LIKE '%itau%' OR lower(`name`) LIKE '%itaú%'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'c6' WHERE lower(`name`) LIKE '%c6%'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'santander' WHERE lower(`name`) LIKE '%santander%'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'bradesco' WHERE lower(`name`) LIKE '%bradesco%'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'caixa' WHERE lower(`name`) LIKE '%caixa%'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'picpay' WHERE lower(`name`) LIKE '%picpay%'")
+                db.execSQL("UPDATE `credit_cards` SET `bank` = 'mercadopago' WHERE lower(`name`) LIKE '%mercado%'")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "card_control_offline.db"
-                ).addMigrations(MIGRATION_2_3).build()
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4).build()
                 INSTANCE = instance
                 instance
             }
