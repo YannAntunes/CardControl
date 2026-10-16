@@ -2,6 +2,7 @@ package com.cardcontrol.app
 
 import com.cardcontrol.app.data.local.AppDao
 import com.cardcontrol.app.data.local.CreditCardEntity
+import com.cardcontrol.app.data.local.SupportedBank
 import com.cardcontrol.app.data.local.HolderEntity
 import com.cardcontrol.app.data.local.InstallmentEntity
 import com.cardcontrol.app.data.local.PaymentEntity
@@ -43,6 +44,20 @@ private class FakeAppDao : AppDao {
     override fun observeCards(): Flow<List<CreditCardEntity>> = synchronized(cards) { flowOf(cards.toList()) }
     override suspend fun getAllCardsSnapshot(): List<CreditCardEntity> = synchronized(cards) { cards.toList() }
     override suspend fun getCardById(id: Long): CreditCardEntity? = synchronized(cards) { cards.find { it.id == id } }
+    override suspend fun updateCard(card: CreditCardEntity): Int = synchronized(cards) {
+        val index = cards.indexOfFirst { it.id == card.id }
+        if (index < 0) 0 else {
+            cards[index] = card
+            1
+        }
+    }
+    override suspend fun deleteCardIfUnused(id: Long): Int {
+        val hasTransactions = synchronized(transactions) { transactions.any { it.cardId == id } }
+        val hasInstallments = synchronized(installments) { installments.any { it.cardId == id } }
+        val hasPayments = synchronized(payments) { payments.any { it.cardId == id } }
+        if (hasTransactions || hasInstallments || hasPayments) return 0
+        return synchronized(cards) { if (cards.removeAll { it.id == id }) 1 else 0 }
+    }
 
     override suspend fun insertTransaction(tx: TransactionEntity): Long = synchronized(transactions) {
         transactions.add(tx)
@@ -549,4 +564,255 @@ class SecurityAndDomainTestHarness {
         assertNotNull(card3)
         assertEquals("DROGARIA CENTRAL", fakeDao.transactions.last().merchant)
     }
+
+    @Test
+    fun `harness deve permitir corrigir cartao e trocar pessoa vinculada`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.holders.add(
+            HolderEntity(id = 2L, name = "Jheymison", whatsapp = "", email = "", subLimit = 200000L)
+        )
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Inter",
+                lastFourDigits = "0359",
+                totalLimit = 500000L,
+                closingDay = 9,
+                dueDay = 15,
+                defaultHolderId = null
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+        val updated = repo.updateCard(
+            cardId = 1L,
+            name = "Inter Platinum",
+            lastFour = "0359",
+            totalLimit = 750000L,
+            closingDay = 8,
+            dueDay = 16,
+            defaultHolderId = 2L
+        )
+
+        assertTrue(updated)
+        val saved = fakeDao.getCardById(1L)
+        assertEquals("Inter Platinum", saved?.name)
+        assertEquals(2L, saved?.defaultHolderId)
+        assertEquals(750000L, saved?.totalLimit)
+        assertEquals(8, saved?.closingDay)
+        assertEquals(16, saved?.dueDay)
+    }
+
+    @Test
+    fun `harness deve impedir exclusao de cartao com historico financeiro`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Nubank",
+                lastFourDigits = "4321",
+                totalLimit = 500000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+        fakeDao.transactions.add(
+            TransactionEntity(id = 10L, cardId = 1L, holderId = 1L, merchant = "Mercado", totalAmount = 1200L)
+        )
+
+        val deleted = CardRepository(fakeDao).deleteCardIfUnused(1L)
+
+        assertFalse(deleted)
+        assertNotNull(fakeDao.getCardById(1L))
+    }
+
+    @Test
+    fun `harness deve excluir cartao sem movimentacoes`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Inter",
+                lastFourDigits = "0359",
+                totalLimit = 500000L,
+                closingDay = 9,
+                dueDay = 15,
+                defaultHolderId = null
+            )
+        )
+
+        val deleted = CardRepository(fakeDao).deleteCardIfUnused(1L)
+
+        assertTrue(deleted)
+        assertNull(fakeDao.getCardById(1L))
+    }
+
+    @Test
+    fun `harness deve conferir o banco mesmo quando o final do cartao e unico`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Inter Platinum",
+                bank = "inter",
+                lastFourDigits = "0359",
+                totalLimit = 500000L,
+                closingDay = 9,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+
+        assertNull(repo.resolveCardForNotification("com.nu.production", "0359"))
+        assertEquals(1L, repo.resolveCardForNotification("br.com.intermedium", "0359")?.id)
+    }
+
+    @Test
+    fun `harness deve reconhecer cartao renomeado usando o campo explicito bank`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.holders.add(
+            HolderEntity(id = 1L, name = "Kauan", whatsapp = "", email = "", subLimit = 500000L)
+        )
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 10L,
+                name = "Meu Cartao Pessoal e Viagem", // Nome customizado SEM a palavra 'nubank'
+                bank = "nubank",
+                lastFourDigits = "4321",
+                totalLimit = 500000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+
+        // Resolução direta
+        val resolved = repo.resolveCardForNotification("com.nu.production", "4321")
+        assertNotNull(resolved)
+        assertEquals(10L, resolved?.id)
+        assertEquals("Meu Cartao Pessoal e Viagem", resolved?.name)
+        assertEquals("nubank", resolved?.bank)
+
+        // Processamento de ponta a ponta
+        val (txId, matchedCard) = repo.processBankNotification(
+            packageName = "com.nu.production",
+            title = "Compra no cartão aprovada",
+            text = "Compra aprovada de R$ 85,50 em PADARIA CENTRAL final 4321",
+            timestamp = 1700000000000L
+        )
+        assertTrue(txId > 0L)
+        assertNotNull(matchedCard)
+        assertEquals(10L, matchedCard?.id)
+        assertEquals(8550L, fakeDao.transactions.last().totalAmount)
+    }
+
+    @Test
+    fun `harness deve desambiguar cartoes de bancos diferentes com os mesmos quatro digitos`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 1L,
+                name = "Cartao Titular",
+                bank = "nubank",
+                lastFourDigits = "9999",
+                totalLimit = 300000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 2L,
+                name = "Cartao Secundario",
+                bank = "inter",
+                lastFourDigits = "9999",
+                totalLimit = 400000L,
+                closingDay = 10,
+                dueDay = 20,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+
+        val nuMatch = repo.resolveCardForNotification("com.nu.production", "9999")
+        val interMatch = repo.resolveCardForNotification("br.com.intermedium", "9999")
+        val itauMatch = repo.resolveCardForNotification("com.itau", "9999")
+
+        assertNotNull(nuMatch)
+        assertEquals(1L, nuMatch?.id)
+
+        assertNotNull(interMatch)
+        assertEquals(2L, interMatch?.id)
+
+        assertNull(itauMatch)
+    }
+
+    @Test
+    fun `harness deve manter fallback para cartoes legados com bank other inferindo pelo nome`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        fakeDao.cards.add(
+            CreditCardEntity(
+                id = 5L,
+                name = "Nubank Ultravioleta",
+                bank = "other", // Simula registro legado pré-migração
+                lastFourDigits = "8888",
+                totalLimit = 1000000L,
+                closingDay = 5,
+                dueDay = 15,
+                defaultHolderId = 1L
+            )
+        )
+
+        val repo = CardRepository(fakeDao)
+        val matched = repo.resolveCardForNotification("com.nu.production", "8888")
+        assertNotNull(matched)
+        assertEquals(5L, matched?.id)
+    }
+
+    @Test
+    fun `harness deve persistir e atualizar o campo explicito bank no repositorio`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        val repo = CardRepository(fakeDao)
+
+        repo.addCard(
+            name = "Corporativo",
+            bank = "c6",
+            lastFour = "7777",
+            totalLimit = 800000L,
+            closingDay = 10,
+            dueDay = 20,
+            defaultHolderId = null
+        )
+
+        val inserted = fakeDao.cards.firstOrNull()
+        assertNotNull(inserted)
+        assertEquals("Corporativo", inserted?.name)
+        assertEquals("c6", inserted?.bank)
+        assertEquals("7777", inserted?.lastFourDigits)
+
+        val updated = repo.updateCard(
+            cardId = inserted!!.id,
+            name = "Corporativo C6 Carbon",
+            bank = "c6",
+            lastFour = "7777",
+            totalLimit = 900000L,
+            closingDay = 12,
+            dueDay = 22,
+            defaultHolderId = null
+        )
+
+        assertTrue(updated)
+        val refreshed = fakeDao.getCardById(inserted.id)
+        assertEquals("Corporativo C6 Carbon", refreshed?.name)
+        assertEquals("c6", refreshed?.bank)
+        assertEquals(900000L, refreshed?.totalLimit)
+    }
+
 }

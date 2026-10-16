@@ -40,6 +40,8 @@ data class DashboardUiState(
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+    private val _uiMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val uiMessages = _uiMessages.asSharedFlow()
     private val dao = AppDatabase.getInstance(application).appDao()
     private val repository = CardRepository(dao)
     val credentialStore = CredentialStore(application)
@@ -123,32 +125,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addHolder(name: String, whatsapp: String, email: String, subLimit: Long) {
         viewModelScope.launch { repository.addHolder(name, whatsapp, email, subLimit) }
     }
+
     fun addCard(
         name: String,
+        bank: String = SupportedBank.OTHER.id,
         lastFour: String,
         limit: Long,
         closing: Int,
         due: Int,
         defaultHolderId: Long?,
-        bank: String = com.cardcontrol.app.data.local.SupportedBank.OTHER.id,
         issuerBank: String? = null
     ) {
         viewModelScope.launch {
             repository.addCard(
                 name = name,
+                bank = bank,
                 lastFour = lastFour,
                 totalLimit = limit,
                 closingDay = closing,
                 dueDay = due,
                 defaultHolderId = defaultHolderId,
-                bank = bank,
                 issuerBank = issuerBank
+            )
+            _uiMessages.emit("Cartão cadastrado.")
+        }
+    }
+
+    fun updateCard(
+        id: Long,
+        name: String,
+        bank: String,
+        lastFour: String,
+        limit: Long,
+        closing: Int,
+        due: Int,
+        defaultHolderId: Long?
+    ) {
+        viewModelScope.launch {
+            val updated = repository.updateCard(id, name, bank, lastFour, limit, closing, due, defaultHolderId)
+            _uiMessages.emit(
+                if (updated) "Alterações do cartão salvas."
+                else "Não foi possível salvar. Confira os dados e a pessoa vinculada."
             )
         }
     }
+
+    fun deleteCard(id: Long) {
+        viewModelScope.launch {
+            val deleted = repository.deleteCardIfUnused(id)
+            _uiMessages.emit(
+                if (deleted) "Cartão excluído."
+                else "Este cartão possui compras ou pagamentos vinculados. Para preservar o histórico, não é possível excluí-lo."
+            )
+        }
+    }
+
     fun addExpense(cardId: Long, holderId: Long, merchant: String, amount: Long, installments: Int) {
         viewModelScope.launch { repository.registerExpense(cardId, holderId, merchant, amount, installments) }
     }
+
     fun addPayment(holderId: Long, cardId: Long?, amount: Long, notes: String) {
         val period = selectedPeriod.value
         viewModelScope.launch { repository.registerPayment(holderId, cardId, amount, period.monthValue, period.year, notes) }

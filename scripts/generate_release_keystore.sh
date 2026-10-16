@@ -59,12 +59,12 @@ chmod 600 "$ENV_PATH" "$KEYSTORE_PATH"
 
 echo "[3/4] Segredos salvos em: $ENV_PATH"
 
-if command -v gh >/dev/null 2>&1; then
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
   echo "[4/4] Provisionando segredos no GitHub Actions via gh CLI..."
-  echo "$KEYSTORE_BASE64" | gh secret set CARDCONTROL_KEYSTORE_BASE64
-  echo "$STORE_PASS" | gh secret set CARDCONTROL_KEYSTORE_PASSWORD
-  echo "$ALIAS" | gh secret set CARDCONTROL_KEY_ALIAS
-  echo "$KEY_PASS" | gh secret set CARDCONTROL_KEY_PASSWORD
+  (echo "$KEYSTORE_BASE64" | gh secret set CARDCONTROL_KEYSTORE_BASE64) || true
+  (echo "$STORE_PASS" | gh secret set CARDCONTROL_KEYSTORE_PASSWORD) || true
+  (echo "$ALIAS" | gh secret set CARDCONTROL_KEY_ALIAS) || true
+  (echo "$KEY_PASS" | gh secret set CARDCONTROL_KEY_PASSWORD) || true
   echo ">> SUCESSO: Segredos configurados no GitHub Actions com êxito!"
 else
   echo "[4/4] Cadastre os 4 segredos em: https://github.com/kauankelvin7/CardControl/settings/secrets/actions"

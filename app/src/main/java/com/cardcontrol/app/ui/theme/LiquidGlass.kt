@@ -128,10 +128,10 @@ fun LiquidGlassBar(
 }
 
 @Composable
-fun LiquidPillSelector(
-    options: List<Pair<Long, String>>,
-    selectedId: Long?,
-    onSelect: (Long) -> Unit
+fun <T> LiquidPillSelector(
+    options: List<Pair<T, String>>,
+    selectedId: T?,
+    onSelect: (T) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),

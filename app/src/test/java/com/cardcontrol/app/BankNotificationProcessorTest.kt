@@ -269,6 +269,17 @@ class BankNotificationProcessorTest {
         override fun observeCards(): Flow<List<CreditCardEntity>> = flowOf(cards.toList())
         override suspend fun getAllCardsSnapshot(): List<CreditCardEntity> = cards.toList()
         override suspend fun getCardById(id: Long): CreditCardEntity? = cards.firstOrNull { it.id == id }
+        override suspend fun updateCard(card: CreditCardEntity): Int {
+            val index = cards.indexOfFirst { it.id == card.id }
+            return if (index >= 0) {
+                cards[index] = card
+                1
+            } else 0
+        }
+        override suspend fun deleteCardIfUnused(id: Long): Int {
+            val removed = cards.removeIf { it.id == id }
+            return if (removed) 1 else 0
+        }
         override suspend fun insertTransaction(tx: TransactionEntity): Long {
             val id = transactions.size + 1L
             transactions += tx.copy(id = id)

@@ -1,6 +1,12 @@
 package com.cardcontrol.app.data.repository
 
-import com.cardcontrol.app.data.local.*
+import com.cardcontrol.app.data.local.AppDao
+import com.cardcontrol.app.data.local.CreditCardEntity
+import com.cardcontrol.app.data.local.HolderEntity
+import com.cardcontrol.app.data.local.InstallmentEntity
+import com.cardcontrol.app.data.local.PaymentEntity
+import com.cardcontrol.app.data.local.SupportedBank
+import com.cardcontrol.app.data.local.TransactionEntity
 import com.cardcontrol.app.security.SecuritySanitizer
 import com.cardcontrol.app.service.BankNotificationParser
 import kotlinx.coroutines.sync.Mutex
@@ -40,12 +46,12 @@ class CardRepository(private val dao: AppDao) {
 
     suspend fun addCard(
         name: String,
+        bank: String = SupportedBank.OTHER.id,
         lastFour: String,
         totalLimit: Long,
         closingDay: Int,
         dueDay: Int,
         defaultHolderId: Long?,
-        bank: String = SupportedBank.OTHER.id,
         issuerBank: String? = null
     ) {
         val resolvedBank = when {
@@ -60,14 +66,47 @@ class CardRepository(private val dao: AppDao) {
         dao.insertCard(
             CreditCardEntity(
                 name = SecuritySanitizer.sanitizeHeaderField(name, 40),
+                bank = resolvedBank,
                 lastFourDigits = lastFour.filter { it.isDigit() }.takeLast(4),
                 totalLimit = SecuritySanitizer.validateLimitAmount(totalLimit),
                 closingDay = closingDay.coerceIn(1, 28),
                 dueDay = dueDay.coerceIn(1, 28),
-                defaultHolderId = defaultHolderId,
-                bank = resolvedBank
+                defaultHolderId = defaultHolderId
             )
         )
+    }
+
+    suspend fun updateCard(
+        cardId: Long,
+        name: String,
+        bank: String = SupportedBank.OTHER.id,
+        lastFour: String,
+        totalLimit: Long,
+        closingDay: Int,
+        dueDay: Int,
+        defaultHolderId: Long?
+    ): Boolean {
+        val existing = dao.getCardById(cardId) ?: return false
+        val safeName = SecuritySanitizer.sanitizeHeaderField(name, 40)
+        val digits = lastFour.filter { it.isDigit() }.takeLast(4)
+        if (safeName.isBlank() || digits.length != 4) return false
+        if (defaultHolderId != null && dao.getHolderById(defaultHolderId) == null) return false
+
+        val safeBank = SupportedBank.fromId(bank).id
+        val updated = existing.copy(
+            name = safeName,
+            bank = safeBank,
+            lastFourDigits = digits,
+            totalLimit = SecuritySanitizer.validateLimitAmount(totalLimit),
+            closingDay = closingDay.coerceIn(1, 28),
+            dueDay = dueDay.coerceIn(1, 28),
+            defaultHolderId = defaultHolderId
+        )
+        return dao.updateCard(updated) > 0
+    }
+
+    suspend fun deleteCardIfUnused(cardId: Long): Boolean {
+        return dao.deleteCardIfUnused(cardId) > 0
     }
 
     suspend fun isDuplicateNotification(dedupHash: String, timestamp: Long): Boolean {
