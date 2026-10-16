@@ -1,9 +1,11 @@
 # CardControl — Ponto de Retomada e Estado Canônico
 
-**Data da Última Auditoria:** 16 de Outubro de 2026  
-**Status do Projeto:** PRs #7 e #13 integrados na main; assinatura persistente configurada e validada; release pronta para execução em Draft  
-**Versão Atual:** `v2.3.0` (versionCode 5)  
-**Versão do banco Room:** `v4` (`MIGRATION_3_4`)  
+- Data da Última Auditoria: 16 de Outubro de 2026
+- Branch ativa: `fix/persistent-release-signing`
+- HEAD SHA: `f2e9145`
+- Status do Projeto: PRs #7 e #13 integrados na main; assinatura persistente configurada e validada; release pronta para execução em Draft
+- Versão Atual: `v2.3.0` (versionCode 5)
+- Versão do banco Room: `v4` (`MIGRATION_3_4`)
 
 ---
 
