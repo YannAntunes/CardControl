@@ -2,7 +2,7 @@
 
 - Data da Última Auditoria: 16 de Outubro de 2026
 - Branch ativa: `feat/subscription-and-recurring-tracker` (Sincronizada com `upstream/main` v2.3.0)
-- HEAD SHA: `4f1b656`
+- HEAD SHA: `1923387`
 - Commit base: `d59efe7`
 - Versão Atual: `v2.3.0` (versionCode 5)
 - Versão do banco Room: `v5` (`MIGRATION_4_5`)
