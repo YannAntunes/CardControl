@@ -113,8 +113,7 @@ class SecurityAndDomainTestHarness {
         val denied = BankNotificationParser.parse(
             packageName = "com.nu.production",
             title = "Compra negada",
-            text = "Compra aprovada anteriormente foi estornada no valor de R$ 350,00 no cartao final 4321",
-            timestamp = 1700000000000L
+            text = "Compra aprovada anteriormente foi estornada no valor de R$ 350,00 no cartao final 4321"
         )
         assertNull(denied)
     }
@@ -124,8 +123,7 @@ class SecurityAndDomainTestHarness {
         val spoofed = BankNotificationParser.parse(
             packageName = "com.whatsapp",
             title = "Compra aprovada",
-            text = "Compra aprovada de R$ 500,00 em MERCADO LIVRE no cartao final 4321",
-            timestamp = 1700000000000L
+            text = "Compra aprovada de R$ 500,00 em MERCADO LIVRE no cartao final 4321"
         )
         assertNull(spoofed)
     }

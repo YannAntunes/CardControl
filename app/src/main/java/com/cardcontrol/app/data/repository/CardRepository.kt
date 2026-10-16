@@ -1,6 +1,12 @@
 package com.cardcontrol.app.data.repository
 
-import com.cardcontrol.app.data.local.*
+import com.cardcontrol.app.data.local.AppDao
+import com.cardcontrol.app.data.local.CreditCardEntity
+import com.cardcontrol.app.data.local.HolderEntity
+import com.cardcontrol.app.data.local.InstallmentEntity
+import com.cardcontrol.app.data.local.PaymentEntity
+import com.cardcontrol.app.data.local.SupportedBank
+import com.cardcontrol.app.data.local.TransactionEntity
 import com.cardcontrol.app.security.SecuritySanitizer
 import com.cardcontrol.app.service.BankNotificationParser
 import kotlinx.coroutines.sync.Mutex
@@ -8,6 +14,15 @@ import kotlinx.coroutines.sync.withLock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+
+/** Resultado da associação de uma notificação a um cartão cadastrado. */
+sealed interface CardResolution {
+    data class Found(val card: CreditCardEntity) : CardResolution
+    /** Nenhum cartão cadastrado com o final informado. */
+    data object NoMatch : CardResolution
+    /** Há candidatos, mas o emissor não pôde ser confirmado de forma única. */
+    data object Ambiguous : CardResolution
+}
 
 class CardRepository(private val dao: AppDao) {
     val holders = dao.observeHolders()
@@ -36,13 +51,22 @@ class CardRepository(private val dao: AppDao) {
         totalLimit: Long,
         closingDay: Int,
         dueDay: Int,
-        defaultHolderId: Long?
+        defaultHolderId: Long?,
+        issuerBank: String? = null
     ) {
-        val safeBank = SupportedBank.fromId(bank).id
+        val resolvedBank = when {
+            bank != SupportedBank.OTHER.id -> SupportedBank.fromId(bank).id
+            issuerBank != null -> {
+                SupportedBank.entries.firstOrNull {
+                    it.displayName.equals(issuerBank, ignoreCase = true) || it.id.equals(issuerBank, ignoreCase = true)
+                }?.id ?: SupportedBank.OTHER.id
+            }
+            else -> SupportedBank.inferFromCardName(name).id
+        }
         dao.insertCard(
             CreditCardEntity(
                 name = SecuritySanitizer.sanitizeHeaderField(name, 40),
-                bank = safeBank,
+                bank = resolvedBank,
                 lastFourDigits = lastFour.filter { it.isDigit() }.takeLast(4),
                 totalLimit = SecuritySanitizer.validateLimitAmount(totalLimit),
                 closingDay = closingDay.coerceIn(1, 28),
@@ -82,7 +106,6 @@ class CardRepository(private val dao: AppDao) {
     }
 
     suspend fun deleteCardIfUnused(cardId: Long): Boolean {
-        // A remoção é atômica e só acontece se não houver histórico financeiro vinculado.
         return dao.deleteCardIfUnused(cardId) > 0
     }
 
@@ -91,37 +114,38 @@ class CardRepository(private val dao: AppDao) {
         return dao.countRecentDuplicate(dedupHash, timestamp - 120_000L) > 0
     }
 
-    suspend fun resolveCardForNotification(packageName: String, lastFourDigits: String?): CreditCardEntity? {
+    /**
+     * Associa a notificação a um cartão somente quando o emissor é confirmado:
+     * o banco efetivo do cartão é [CreditCardEntity.bank] ou, para cartões legados com bank "other",
+     * o inferido por palavra inteira do apelido. Mais de um candidato ou emissor não confirmado é
+     * [CardResolution.Ambiguous]; nunca escolhe um cartão arbitrariamente.
+     */
+    suspend fun resolveCard(packageName: String, lastFourDigits: String?): CardResolution {
+        val targetBank = SupportedBank.fromPackageName(packageName)
+        if (targetBank == SupportedBank.OTHER) return CardResolution.Ambiguous
+
         val cards = dao.getAllCardsSnapshot()
-        if (cards.isEmpty()) return null
+        if (cards.isEmpty()) return CardResolution.NoMatch
 
-        val notifiedBank = SupportedBank.fromPackageName(packageName)
+        val candidates = if (lastFourDigits != null) cards.filter { it.lastFourDigits == lastFourDigits } else cards
+        if (candidates.isEmpty()) return CardResolution.NoMatch
 
-        fun belongsToNotifiedBank(card: CreditCardEntity): Boolean {
-            if (notifiedBank == SupportedBank.OTHER) return false
+        // Sem final informado, só vale se houver exatamente um cartão cadastrado.
+        if (lastFourDigits == null && candidates.size != 1) return CardResolution.Ambiguous
 
-            // 1. Prioridade absoluta: campo explícito do banco
-            val cardBank = SupportedBank.fromId(card.bank)
-            if (cardBank != SupportedBank.OTHER) {
-                return cardBank == notifiedBank
+        val confirmed = candidates.filter { card ->
+            val effectiveBank = if (card.bank != SupportedBank.OTHER.id) {
+                SupportedBank.fromId(card.bank)
+            } else {
+                SupportedBank.inferFromCardName(card.name)
             }
-
-            // 2. Fallback de compatibilidade retroativa para cartões legados sem banco explícito
-            return SupportedBank.inferFromCardName(card.name) == notifiedBank
+            effectiveBank == targetBank
         }
-
-        if (lastFourDigits != null) {
-            val matchingDigits = cards.filter { it.lastFourDigits == lastFourDigits }
-            if (matchingDigits.isEmpty()) return null
-            // Mesmo um único cartão deve corresponder ao banco que originou a notificação.
-            return matchingDigits.filter(::belongsToNotifiedBank).singleOrNull()
-        }
-
-        // Sem os quatro dígitos, só resolvemos quando existe um único cartão e ele é compatível
-        // com o banco de origem. Havendo ambiguidade, não lançamos uma compra no titular errado.
-        val onlyCard = cards.singleOrNull() ?: return null
-        return onlyCard.takeIf(::belongsToNotifiedBank)
+        return confirmed.singleOrNull()?.let { CardResolution.Found(it) } ?: CardResolution.Ambiguous
     }
+
+    suspend fun resolveCardForNotification(packageName: String, lastFourDigits: String?): CreditCardEntity? =
+        (resolveCard(packageName, lastFourDigits) as? CardResolution.Found)?.card
 
     suspend fun processBankNotification(
         packageName: String,

@@ -25,7 +25,11 @@ data class HolderEntity(
             onDelete = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index("defaultHolderId"), Index("lastFourDigits"), Index("bank")]
+    indices = [
+        Index("defaultHolderId"),
+        Index("lastFourDigits"),
+        Index("bank")
+    ]
 )
 data class CreditCardEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -36,7 +40,10 @@ data class CreditCardEntity(
     val closingDay: Int,
     val dueDay: Int,
     val defaultHolderId: Long?
-)
+) {
+    /** Propriedade semântica de compatibilidade retroativa para consultas de emissor. */
+    val issuerBank: String? get() = bank.takeIf { it != SupportedBank.OTHER.id }
+}
 
 @Entity(
     tableName = "transactions",
