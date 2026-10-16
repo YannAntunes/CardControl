@@ -45,8 +45,18 @@ class CardRepository(private val dao: AppDao) {
         closingDay: Int,
         dueDay: Int,
         defaultHolderId: Long?,
+        bank: String = SupportedBank.OTHER.id,
         issuerBank: String? = null
     ) {
+        val resolvedBank = when {
+            bank != SupportedBank.OTHER.id -> SupportedBank.fromId(bank).id
+            issuerBank != null -> {
+                SupportedBank.entries.firstOrNull {
+                    it.displayName.equals(issuerBank, ignoreCase = true) || it.id.equals(issuerBank, ignoreCase = true)
+                }?.id ?: SupportedBank.OTHER.id
+            }
+            else -> SupportedBank.inferFromCardName(name).id
+        }
         dao.insertCard(
             CreditCardEntity(
                 name = SecuritySanitizer.sanitizeHeaderField(name, 40),
@@ -55,7 +65,7 @@ class CardRepository(private val dao: AppDao) {
                 closingDay = closingDay.coerceIn(1, 28),
                 dueDay = dueDay.coerceIn(1, 28),
                 defaultHolderId = defaultHolderId,
-                issuerBank = issuerBank?.takeIf { it in BankNotificationParser.SUPPORTED_ISSUERS }
+                bank = resolvedBank
             )
         )
     }
@@ -67,12 +77,14 @@ class CardRepository(private val dao: AppDao) {
 
     /**
      * Associa a notificação a um cartão somente quando o emissor é confirmado:
-     * o emissor efetivo do cartão é [CreditCardEntity.issuerBank] ou, para cartões legados sem emissor,
+     * o banco efetivo do cartão é [CreditCardEntity.bank] ou, para cartões legados com bank "other",
      * o inferido por palavra inteira do apelido. Mais de um candidato ou emissor não confirmado é
      * [CardResolution.Ambiguous]; nunca escolhe um cartão arbitrariamente.
      */
     suspend fun resolveCard(packageName: String, lastFourDigits: String?): CardResolution {
-        val issuer = BankNotificationParser.issuerFor(packageName) ?: return CardResolution.Ambiguous
+        val targetBank = SupportedBank.fromPackageName(packageName)
+        if (targetBank == SupportedBank.OTHER) return CardResolution.Ambiguous
+
         val cards = dao.getAllCardsSnapshot()
         if (cards.isEmpty()) return CardResolution.NoMatch
 
@@ -82,7 +94,14 @@ class CardRepository(private val dao: AppDao) {
         // Sem final informado, só vale se houver exatamente um cartão cadastrado.
         if (lastFourDigits == null && candidates.size != 1) return CardResolution.Ambiguous
 
-        val confirmed = candidates.filter { (it.issuerBank ?: BankNotificationParser.issuerFromCardName(it.name)) == issuer }
+        val confirmed = candidates.filter { card ->
+            val effectiveBank = if (card.bank != SupportedBank.OTHER.id) {
+                SupportedBank.fromId(card.bank)
+            } else {
+                SupportedBank.inferFromCardName(card.name)
+            }
+            effectiveBank == targetBank
+        }
         return confirmed.singleOrNull()?.let { CardResolution.Found(it) } ?: CardResolution.Ambiguous
     }
 

@@ -9,6 +9,7 @@ import com.cardcontrol.app.data.local.TransactionEntity
 import com.cardcontrol.app.service.AutoCaptureResult
 import com.cardcontrol.app.service.BankNotificationProcessor
 import com.cardcontrol.app.service.IgnoreReason
+import com.cardcontrol.app.data.local.SupportedBank
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.Dispatchers
@@ -40,8 +41,8 @@ class BankNotificationProcessorTest {
         return dao
     }
 
-    private val cardAna = CreditCardEntity(id = 10, name = "Nu Ana", lastFourDigits = "4321", totalLimit = 500_000L, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Nubank")
-    private val cardItau = CreditCardEntity(id = 20, name = "Itaú Ana", lastFourDigits = "9988", totalLimit = 900_000L, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Itaú")
+    private val cardAna = CreditCardEntity(id = 10, name = "Nu Ana", bank = SupportedBank.NUBANK.id, lastFourDigits = "4321", totalLimit = 500_000L, closingDay = 5, dueDay = 12, defaultHolderId = 1)
+    private val cardItau = CreditCardEntity(id = 20, name = "Itaú Ana", bank = SupportedBank.ITAU.id, lastFourDigits = "9988", totalLimit = 900_000L, closingDay = 5, dueDay = 12, defaultHolderId = 1)
 
     @Test
     fun `finais iguais em bancos diferentes sao associados pelo banco da notificacao`() = runBlocking {
@@ -67,7 +68,7 @@ class BankNotificationProcessorTest {
     @Test
     fun `unico cartao com o final mas de outro emissor nao recebe a compra`() = runBlocking {
         // Notificação do Nubank com final 4321; o único cartão 4321 é do Itaú.
-        val dao = daoWith(cardAna.copy(issuerBank = "Itaú"))
+        val dao = daoWith(cardAna.copy(bank = SupportedBank.ITAU.id))
         val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
         assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
         assertTrue(dao.transactions.isEmpty())
@@ -75,7 +76,7 @@ class BankNotificationProcessorTest {
 
     @Test
     fun `cartao sem emissor e sem banco no apelido nao e associado por notificacao`() = runBlocking {
-        val dao = daoWith(cardAna.copy(name = "Cartao Ana", issuerBank = null))
+        val dao = daoWith(cardAna.copy(name = "Cartao Ana", bank = SupportedBank.OTHER.id))
         val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
         assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
         assertTrue(dao.transactions.isEmpty())
@@ -83,14 +84,14 @@ class BankNotificationProcessorTest {
 
     @Test
     fun `cartao legado sem emissor mas com banco no apelido e confirmado`() = runBlocking {
-        val dao = daoWith(cardAna.copy(name = "Meu Nubank", issuerBank = null))
+        val dao = daoWith(cardAna.copy(name = "Meu Nubank", bank = SupportedBank.OTHER.id))
         val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
         assertTrue(result is AutoCaptureResult.Registered)
     }
 
     @Test
     fun `cartao legado com apelido de outro banco nao recebe a compra`() = runBlocking {
-        val dao = daoWith(cardAna.copy(name = "Meu Itau", issuerBank = null))
+        val dao = daoWith(cardAna.copy(name = "Meu Itau", bank = SupportedBank.OTHER.id))
         val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
         assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
         assertTrue(dao.transactions.isEmpty())
@@ -98,7 +99,7 @@ class BankNotificationProcessorTest {
 
     @Test
     fun `unico cartao sem final de outro emissor nao recebe a compra`() = runBlocking {
-        val dao = daoWith(cardAna.copy(issuerBank = "Itaú"))
+        val dao = daoWith(cardAna.copy(bank = SupportedBank.ITAU.id))
         val result = BankNotificationProcessor(dao).process(
             "com.nu.production", "Compra aprovada", "Compra aprovada de R$ 25,00 em CAFE DO PONTO.", postTime
         )

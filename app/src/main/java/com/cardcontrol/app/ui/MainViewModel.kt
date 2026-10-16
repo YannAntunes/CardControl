@@ -123,8 +123,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addHolder(name: String, whatsapp: String, email: String, subLimit: Long) {
         viewModelScope.launch { repository.addHolder(name, whatsapp, email, subLimit) }
     }
-    fun addCard(name: String, lastFour: String, limit: Long, closing: Int, due: Int, defaultHolderId: Long?, issuerBank: String? = null) {
-        viewModelScope.launch { repository.addCard(name, lastFour, limit, closing, due, defaultHolderId, issuerBank) }
+    fun addCard(
+        name: String,
+        lastFour: String,
+        limit: Long,
+        closing: Int,
+        due: Int,
+        defaultHolderId: Long?,
+        bank: String = com.cardcontrol.app.data.local.SupportedBank.OTHER.id,
+        issuerBank: String? = null
+    ) {
+        viewModelScope.launch {
+            repository.addCard(
+                name = name,
+                lastFour = lastFour,
+                totalLimit = limit,
+                closingDay = closing,
+                dueDay = due,
+                defaultHolderId = defaultHolderId,
+                bank = bank,
+                issuerBank = issuerBank
+            )
+        }
     }
     fun addExpense(cardId: Long, holderId: Long, merchant: String, amount: Long, installments: Int) {
         viewModelScope.launch { repository.registerExpense(cardId, holderId, merchant, amount, installments) }
