@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "f27a4b35298f46b681c3c67ea61b7291",
+    "identityHash": "283004f24069b47cd14e1cadd7c9e6fa",
     "entities": [
       {
         "tableName": "holders",
@@ -56,7 +56,7 @@
       },
       {
         "tableName": "credit_cards",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `lastFourDigits` TEXT NOT NULL, `totalLimit` INTEGER NOT NULL, `closingDay` INTEGER NOT NULL, `dueDay` INTEGER NOT NULL, `defaultHolderId` INTEGER, `issuerBank` TEXT, FOREIGN KEY(`defaultHolderId`) REFERENCES `holders`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `bank` TEXT NOT NULL, `lastFourDigits` TEXT NOT NULL, `totalLimit` INTEGER NOT NULL, `closingDay` INTEGER NOT NULL, `dueDay` INTEGER NOT NULL, `defaultHolderId` INTEGER, FOREIGN KEY(`defaultHolderId`) REFERENCES `holders`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "id",
@@ -67,6 +67,12 @@
           {
             "fieldPath": "name",
             "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bank",
+            "columnName": "bank",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -99,12 +105,6 @@
             "columnName": "defaultHolderId",
             "affinity": "INTEGER",
             "notNull": false
-          },
-          {
-            "fieldPath": "issuerBank",
-            "columnName": "issuerBank",
-            "affinity": "TEXT",
-            "notNull": false
           }
         ],
         "primaryKey": {
@@ -131,6 +131,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_credit_cards_lastFourDigits` ON `${TABLE_NAME}` (`lastFourDigits`)"
+          },
+          {
+            "name": "index_credit_cards_bank",
+            "unique": false,
+            "columnNames": [
+              "bank"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_credit_cards_bank` ON `${TABLE_NAME}` (`bank`)"
           }
         ],
         "foreignKeys": [
@@ -653,7 +662,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f27a4b35298f46b681c3c67ea61b7291')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '283004f24069b47cd14e1cadd7c9e6fa')"
     ]
   }
 }

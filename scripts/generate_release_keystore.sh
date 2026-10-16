@@ -1,75 +1,121 @@
 #!/usr/bin/env bash
-# CardControl - Gerador Seguro de Chave de Release v2.2.0
-# Gera nova keystore JKS e prepara segredos para GitHub Actions.
-
+# CardControl - persistent release signing setup
 set -euo pipefail
 
-OUTPUT_DIR="${1:-./temp_keystore}"
-ALIAS="${2:-cardcontrol}"
+REPOSITORY="kauankelvin7/CardControl"
+OUTPUT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cardcontrol-signing"
+ALIAS="cardcontrol"
+SET_GITHUB_SECRETS=0
+ACKNOWLEDGE_UPGRADE_COMPATIBILITY=0
 
-echo "=========================================================="
-echo " CardControl - Gerador Seguro de Chave de Release v2.2.0 "
-echo "=========================================================="
+while (($#)); do
+  case "$1" in
+    --output-dir)
+      shift
+      [[ $# -gt 0 ]] || { echo "Missing value for --output-dir" >&2; exit 2; }
+      OUTPUT_DIR="$1"
+      ;;
+    --alias)
+      shift
+      [[ $# -gt 0 ]] || { echo "Missing value for --alias" >&2; exit 2; }
+      ALIAS="$1"
+      ;;
+    --set-github-secrets) SET_GITHUB_SECRETS=1 ;;
+    --acknowledge-upgrade-compatibility) ACKNOWLEDGE_UPGRADE_COMPATIBILITY=1 ;;
+    --help)
+      echo "Usage: $0 --acknowledge-upgrade-compatibility [--output-dir DIR] [--alias ALIAS] [--set-github-secrets]"
+      echo "Without --set-github-secrets, this script does not change GitHub settings."
+      exit 0
+      ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
 
-KEYTOOL_BIN="$(which keytool || true)"
-if [[ -z "$KEYTOOL_BIN" ]]; then
-  echo "ERRO: keytool não encontrado no PATH." >&2
+if ((ACKNOWLEDGE_UPGRADE_COMPATIBILITY == 0)); then
+  echo "ERROR: Key generation blocked until existing APK certificates and the upgrade strategy are validated." >&2
   exit 1
 fi
 
+command -v keytool >/dev/null 2>&1 || { echo "ERROR: keytool not found." >&2; exit 1; }
+command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl not found." >&2; exit 1; }
+
+if ((SET_GITHUB_SECRETS)); then
+  command -v gh >/dev/null 2>&1 || { echo "ERROR: Install GitHub CLI and run gh auth login first." >&2; exit 1; }
+  gh auth status >/dev/null 2>&1 || { echo "ERROR: GitHub CLI is not authenticated." >&2; exit 1; }
+  gh repo view "$REPOSITORY" >/dev/null 2>&1 || { echo "ERROR: Authenticated account cannot access $REPOSITORY." >&2; exit 1; }
+  EXISTING_SECRETS="$(gh secret list --repo "$REPOSITORY" --json name --jq '.[].name')" || { echo "ERROR: Cannot inspect existing secrets; key generation cancelled." >&2; exit 1; }
+  EXISTING_VARIABLES="$(gh variable list --repo "$REPOSITORY" --json name --jq '.[].name')" || { echo "ERROR: Cannot inspect existing variables; key generation cancelled." >&2; exit 1; }
+  for name in CARDCONTROL_KEYSTORE_BASE64 CARDCONTROL_KEYSTORE_PASSWORD CARDCONTROL_KEY_ALIAS CARDCONTROL_KEY_PASSWORD; do
+    grep -Fxq "$name" <<< "$EXISTING_SECRETS" && { echo "ERROR: Signing secret $name already exists; refusing key rotation." >&2; exit 1; }
+  done
+  for name in CARDCONTROL_CERT_SHA256 CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED; do
+    grep -Fxq "$name" <<< "$EXISTING_VARIABLES" && { echo "ERROR: Release variable $name already exists; refusing to replace signing configuration." >&2; exit 1; }
+  done
+fi
+
+umask 077
 mkdir -p "$OUTPUT_DIR"
+chmod 700 "$OUTPUT_DIR"
 KEYSTORE_PATH="$OUTPUT_DIR/cardcontrol-release.jks"
-
-if [[ -f "$KEYSTORE_PATH" ]]; then
-  echo "AVISO: $KEYSTORE_PATH já existe. Removendo para gerar nova chave..."
-  rm -f "$KEYSTORE_PATH"
-fi
-
-STORE_PASS="$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)"
-KEY_PASS="$STORE_PASS"
-
-echo "[1/4] Gerando par de chaves RSA 2048 bits com validade de 10.000 dias..."
-keytool -genkeypair \
-  -v \
-  -keystore "$KEYSTORE_PATH" \
-  -alias "$ALIAS" \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000 \
-  -storepass "$STORE_PASS" \
-  -keypass "$KEY_PASS" \
-  -dname "CN=CardControl, OU=Mobile Security, O=CardControl Project, L=Sao Paulo, ST=SP, C=BR" >/dev/null
-
-echo "[2/4] Keystore gerada em: $KEYSTORE_PATH"
-
-FINGERPRINT="$(keytool -list -v -keystore "$KEYSTORE_PATH" -alias "$ALIAS" -storepass "$STORE_PASS" | grep "SHA256:" | awk '{print $2}' || true)"
-echo ">> SHA-256 Fingerprint: $FINGERPRINT"
-
-KEYSTORE_BASE64="$(base64 -w 0 "$KEYSTORE_PATH" 2>/dev/null || base64 "$KEYSTORE_PATH")"
-
 ENV_PATH="$OUTPUT_DIR/release-secrets.env"
-cat <<EOF > "$ENV_PATH"
-# CardControl - Segredos de Assinatura de Release (MANTENHA FORA DO GIT)
-CARDCONTROL_KEYSTORE_BASE64=$KEYSTORE_BASE64
-CARDCONTROL_KEYSTORE_PASSWORD=$STORE_PASS
-CARDCONTROL_KEY_ALIAS=$ALIAS
-CARDCONTROL_KEY_PASSWORD=$KEY_PASS
-EOF
-chmod 600 "$ENV_PATH" "$KEYSTORE_PATH"
-
-echo "[3/4] Segredos salvos em: $ENV_PATH"
-
-if command -v gh >/dev/null 2>&1; then
-  echo "[4/4] Provisionando segredos no GitHub Actions via gh CLI..."
-  echo "$KEYSTORE_BASE64" | gh secret set CARDCONTROL_KEYSTORE_BASE64
-  echo "$STORE_PASS" | gh secret set CARDCONTROL_KEYSTORE_PASSWORD
-  echo "$ALIAS" | gh secret set CARDCONTROL_KEY_ALIAS
-  echo "$KEY_PASS" | gh secret set CARDCONTROL_KEY_PASSWORD
-  echo ">> SUCESSO: Segredos configurados no GitHub Actions com êxito!"
-else
-  echo "[4/4] Cadastre os 4 segredos em: https://github.com/kauankelvin7/CardControl/settings/secrets/actions"
+if [[ -e "$KEYSTORE_PATH" || -e "$ENV_PATH" ]]; then
+  echo "ERROR: A keystore or credentials file already exists in $OUTPUT_DIR." >&2
+  echo "Refusing to overwrite an existing signing identity." >&2
+  exit 1
 fi
 
-echo "=========================================================="
-echo " CONFIGURAÇÃO CONCLUÍDA! Guarde backup offline seguro.   "
-echo "=========================================================="
+STORE_PASS="$(openssl rand -hex 32)"
+KEY_PASS="$STORE_PASS"
+export CARDCONTROL_KEYSTORE_PASSWORD="$STORE_PASS"
+export CARDCONTROL_KEY_PASSWORD="$KEY_PASS"
+trap 'unset CARDCONTROL_KEYSTORE_PASSWORD CARDCONTROL_KEY_PASSWORD' EXIT
+echo "Generating a persistent RSA 2048 release key..."
+keytool -genkeypair -keystore "$KEYSTORE_PATH" -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
+  -storepass:env CARDCONTROL_KEYSTORE_PASSWORD -keypass:env CARDCONTROL_KEY_PASSWORD \
+  -dname "CN=CardControl, OU=Mobile Security, O=CardControl Project, L=Sao Paulo, ST=SP, C=BR" >/dev/null
+chmod 600 "$KEYSTORE_PATH"
+
+FINGERPRINT="$(keytool -list -v -keystore "$KEYSTORE_PATH" -alias "$ALIAS" -storepass:env CARDCONTROL_KEYSTORE_PASSWORD | sed -nE 's/.*SHA256: ([[:xdigit:]:]+).*/\1/p' | head -n 1)"
+[[ "$FINGERPRINT" =~ ^([[:xdigit:]]{2}:){31}[[:xdigit:]]{2}$ ]] || { echo "ERROR: Could not verify certificate SHA-256 fingerprint." >&2; exit 1; }
+KEYSTORE_BASE64="$(base64 < "$KEYSTORE_PATH" | tr -d '\r\n')"
+printf '%s\n' \
+  '# CardControl release credentials; keep outside Git and store backup securely' \
+  "CARDCONTROL_KEYSTORE_BASE64=$KEYSTORE_BASE64" \
+  "CARDCONTROL_KEYSTORE_PASSWORD=$STORE_PASS" \
+  "CARDCONTROL_KEY_ALIAS=$ALIAS" \
+  "CARDCONTROL_KEY_PASSWORD=$KEY_PASS" > "$ENV_PATH"
+chmod 600 "$ENV_PATH"
+unset CARDCONTROL_KEYSTORE_PASSWORD CARDCONTROL_KEY_PASSWORD
+trap - EXIT
+
+echo "Keystore saved locally: $KEYSTORE_PATH"
+echo "Protected credentials file saved locally: $ENV_PATH"
+echo "Certificate SHA-256: $FINGERPRINT"
+
+if ((SET_GITHUB_SECRETS)); then
+  set_secret() {
+    printf '%s' "$2" | gh secret set "$1" --repo "$REPOSITORY"
+  }
+  set_secret CARDCONTROL_KEYSTORE_BASE64 "$KEYSTORE_BASE64"
+  set_secret CARDCONTROL_KEYSTORE_PASSWORD "$STORE_PASS"
+  set_secret CARDCONTROL_KEY_ALIAS "$ALIAS"
+  set_secret CARDCONTROL_KEY_PASSWORD "$KEY_PASS"
+  gh variable set CARDCONTROL_CERT_SHA256 --body "$FINGERPRINT" --repo "$REPOSITORY"
+  gh variable set CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED --body true --repo "$REPOSITORY"
+  CONFIGURED_SECRETS="$(gh secret list --repo "$REPOSITORY" --json name --jq '.[].name')"
+  for name in CARDCONTROL_KEYSTORE_BASE64 CARDCONTROL_KEYSTORE_PASSWORD CARDCONTROL_KEY_ALIAS CARDCONTROL_KEY_PASSWORD; do
+    grep -Fxq "$name" <<< "$CONFIGURED_SECRETS" || { echo "ERROR: GitHub did not confirm secret $name." >&2; exit 1; }
+  done
+  CONFIGURED_FINGERPRINT="$(gh variable list --repo "$REPOSITORY" --json name,value --jq '.[] | select(.name == "CARDCONTROL_CERT_SHA256") | .value')"
+  [[ "${CONFIGURED_FINGERPRINT//:/}" == "${FINGERPRINT//:/}" ]] || { echo "ERROR: GitHub did not confirm the expected certificate fingerprint." >&2; exit 1; }
+  CONFIGURED_COMPATIBILITY="$(gh variable list --repo "$REPOSITORY" --json name,value --jq '.[] | select(.name == "CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED") | .value')"
+  [[ "${CONFIGURED_COMPATIBILITY,,}" == "true" ]] || { echo "ERROR: GitHub did not confirm the explicit compatibility decision." >&2; exit 1; }
+  echo "GitHub secrets and release variables were confirmed."
+else
+  echo "GitHub was not changed. Configure all four secrets and both repository variables manually before release."
+  echo "Repository settings: https://github.com/kauankelvin7/CardControl/settings/secrets/actions"
+  echo "Set CARDCONTROL_RELEASE_COMPATIBILITY_APPROVED=true only for the documented no-installation transition."
+fi
+
+echo "No release was published. Keep an offline backup of the keystore and credentials."

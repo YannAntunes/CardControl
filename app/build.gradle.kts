@@ -25,8 +25,8 @@ android {
         applicationId = "com.cardcontrol.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "2.2.0"
+        versionCode = 5
+        versionName = "2.3.0"
     }
 
     buildFeatures { compose = true }
@@ -44,21 +44,28 @@ android {
         val keyAliasValue = findPropertyOrEnv("CARDCONTROL_KEY_ALIAS")
         val keyPasswordValue = findPropertyOrEnv("CARDCONTROL_KEY_PASSWORD")
 
-        val hasReleaseSigning = !keystorePath.isNullOrBlank() &&
+        val keystoreFile = keystorePath?.let { path ->
+            val candidate = file(path)
+            if (candidate.exists()) candidate else rootProject.file(path)
+        }
+
+        val hasReleaseSigning = keystoreFile != null &&
+                keystoreFile.exists() &&
                 !keystorePassword.isNullOrBlank() &&
                 !keyAliasValue.isNullOrBlank() &&
-                !keyPasswordValue.isNullOrBlank() &&
-                file(keystorePath).exists()
+                !keyPasswordValue.isNullOrBlank()
 
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(keystorePath!!)
+                storeFile = keystoreFile
                 storePassword = keystorePassword
                 keyAlias = keyAliasValue
                 keyPassword = keyPasswordValue
                 enableV1Signing = true
                 enableV2Signing = true
             }
+        } else if (!keystorePath.isNullOrBlank()) {
+            throw GradleException("Release signing was configured via CARDCONTROL_KEYSTORE_PATH ($keystorePath), but credentials or keystore file are missing/invalid.")
         }
     }
 

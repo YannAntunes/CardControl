@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -29,6 +30,12 @@ interface AppDao {
 
     @Query("SELECT * FROM credit_cards WHERE id = :id LIMIT 1")
     suspend fun getCardById(id: Long): CreditCardEntity?
+
+    @Update
+    suspend fun updateCard(card: CreditCardEntity): Int
+
+    @Query("DELETE FROM credit_cards WHERE id = :id AND NOT EXISTS (SELECT 1 FROM transactions WHERE cardId = :id) AND NOT EXISTS (SELECT 1 FROM installments WHERE cardId = :id) AND NOT EXISTS (SELECT 1 FROM payments WHERE cardId = :id)")
+    suspend fun deleteCardIfUnused(id: Long): Int
 
     @Insert
     suspend fun insertTransaction(tx: TransactionEntity): Long

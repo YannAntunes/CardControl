@@ -19,11 +19,13 @@ $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..\..")).Path
 
 # 1. Resolve JDK
 $CandidateJdks = @(
-    "C:\Program Files\Java\jdk-17",
-    "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot",
-    "C:\Program Files\JetBrains\IntelliJ IDEA 2026.2.3\jbr",
-    $env:JAVA_HOME
-) | Where-Object { $_ -and (Test-Path "$_\bin\java.exe") }
+    @(
+        "C:\Program Files\Java\jdk-17",
+        "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot",
+        "C:\Program Files\JetBrains\IntelliJ IDEA 2026.2.3\jbr",
+        $env:JAVA_HOME
+    ) | Where-Object { $_ -and (Test-Path "$_\bin\java.exe") }
+)
 
 if ($CandidateJdks.Count -gt 0) {
     $SelectedJdk = $CandidateJdks[0]
@@ -34,11 +36,13 @@ if ($CandidateJdks.Count -gt 0) {
 }
 # 2. Resolve Android SDK
 $SdkCandidates = @(
-    $env:ANDROID_HOME,
-    $env:ANDROID_SDK_ROOT,
-    "$env:LOCALAPPDATA\Android\Sdk",
-    "C:\Android\Sdk"
-) | Where-Object { $_ -and (Test-Path $_) }
+    @(
+        $env:ANDROID_HOME,
+        $env:ANDROID_SDK_ROOT,
+        "$env:LOCALAPPDATA\Android\Sdk",
+        "C:\Android\Sdk"
+    ) | Where-Object { $_ -and (Test-Path $_) }
+)
 
 $LocalProperties = Join-Path $ProjectRoot "local.properties"
 $HasLocalProperties = Test-Path $LocalProperties

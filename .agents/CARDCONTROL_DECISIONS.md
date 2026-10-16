@@ -36,8 +36,28 @@
 
 ---
 
-## ADR-006: Detecção Offline de Gastos Recorrentes e Assinaturas (Subscription Tracker)
+## ADR-006: Representação Canônica de Moeda em Centavos Inteiros (`Long`)
+- **Status:** Aceito
+- **Contexto:** Cálculos com ponto flutuante (`Double`) geravam inconsistências de arredondamento em faturas e rateio de parcelas.
+- **Decisão:** Todas as grandezas monetárias no banco SQLite (`subLimit`, `totalLimit`, `totalAmount`, `amount`, `amountPaid`) utilizam representação inteira canônica em centavos (`Long`). Conversões e formatações são centralizadas em `MoneyUtils`, com distribuição do resto na primeira parcela.
+
+---
+
+## ADR-007: Identificação Explícita de Banco Emissor (`SupportedBank`) e Room v4
+- **Status:** Aceito
+- **Contexto:** A inferência do banco pelo nome de exibição (`name`) quebrava a captura automática quando o usuário renomeava o cartão para um apelido customizado (ex: "Viagem", "Pessoal").
+- **Decisão:** Adicionar coluna explícita `bank: String` à `CreditCardEntity` mapeada ao enum `SupportedBank`, evoluindo o Room para versão 4 (`MIGRATION_3_4`) com backfill retroativo. O `resolveCardForNotification` passa a filtrar prioritariamente por `bank`, preservando o apelido para visualização e desambiguando cartões com os mesmos 4 dígitos.
+
+---
+
+## ADR-008: Unificação Canônica de Governança em `.agents` e Integração de Ferramentas
+- **Status:** Aceito
+- **Contexto:** A existência simultânea das pastas `.agent` e `.agents` gerava duplicidade de skills e ambiguidade no fluxo dos agentes do Antigravity IDE.
+- **Decisão:** Eliminar a pasta legada `.agent` e unificar toda a governança e skills na raiz oficial `.agents`. Integrar as skills oficiais `graphify` (Graphify-Labs), `context-mode` (v1.0.169) e `ponytail`. Fortalecer o script de validação `check_state.ps1` com o padrão Leve de rastreabilidade e integridade estrita.
+
+---
+
+## ADR-009: Detecção Offline de Gastos Recorrentes e Assinaturas (Subscription Tracker)
 - **Status:** Aceito
 - **Contexto:** Necessidade de identificar assinaturas e despesas fixas recorrentes (streaming, academias, planos de assinatura) de forma 100% offline, alertando sobre variações de preço ("price creep") e mensurando o impacto percentual no limite total dos cartões.
 - **Decisão:** Criar a entidade `RecurringChargeEntity` e schema Room v5 com migration determinística `MIGRATION_4_5`. O motor `SubscriptionTracker` analisa intervalos de compra entre 28 e 32 dias para transações com mesmo merchant normalizado ou transações manualmente sinalizadas com `isRecurring = true`. A interface `LiquidGlass` no dashboard exibe o comprometimento mensal, o impacto percentual no limite e alerta visual caso haja aumento de valor.
-
