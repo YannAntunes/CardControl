@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         InstallmentEntity::class,
         PaymentEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -65,13 +65,38 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adiciona a coluna canônica de banco (bank) e índice Room, com backfill retroativo seguro. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `credit_cards` ADD COLUMN `bank` TEXT NOT NULL DEFAULT 'other'")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_credit_cards_bank` ON `credit_cards` (`bank`)")
+
+                // Backfill retroativo seguro: somente atualiza quando a inferência for estrita e inequívoca
+                val cursor = db.query("SELECT `id`, `name` FROM `credit_cards`")
+                val updates = mutableListOf<Pair<Long, String>>()
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val name = cursor.getString(1) ?: ""
+                    val inferred = SupportedBank.inferFromCardName(name)
+                    if (inferred != SupportedBank.OTHER) {
+                        updates.add(id to inferred.id)
+                    }
+                }
+                cursor.close()
+
+                for ((id, bankId) in updates) {
+                    db.execSQL("UPDATE `credit_cards` SET `bank` = ? WHERE `id` = ?", arrayOf(bankId, id))
+                }
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "card_control_offline.db"
-                ).addMigrations(MIGRATION_2_3).build()
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4).build()
                 INSTANCE = instance
                 instance
             }

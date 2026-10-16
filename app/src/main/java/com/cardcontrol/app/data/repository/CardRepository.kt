@@ -9,6 +9,15 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+/** Resultado da associação de uma notificação a um cartão cadastrado. */
+sealed interface CardResolution {
+    data class Found(val card: CreditCardEntity) : CardResolution
+    /** Nenhum cartão cadastrado com o final informado. */
+    data object NoMatch : CardResolution
+    /** Há candidatos, mas o emissor não pôde ser confirmado de forma única. */
+    data object Ambiguous : CardResolution
+}
+
 class CardRepository(private val dao: AppDao) {
     val holders = dao.observeHolders()
     val cards = dao.observeCards()
@@ -35,8 +44,19 @@ class CardRepository(private val dao: AppDao) {
         totalLimit: Long,
         closingDay: Int,
         dueDay: Int,
-        defaultHolderId: Long?
+        defaultHolderId: Long?,
+        bank: String = SupportedBank.OTHER.id,
+        issuerBank: String? = null
     ) {
+        val resolvedBank = when {
+            bank != SupportedBank.OTHER.id -> SupportedBank.fromId(bank).id
+            issuerBank != null -> {
+                SupportedBank.entries.firstOrNull {
+                    it.displayName.equals(issuerBank, ignoreCase = true) || it.id.equals(issuerBank, ignoreCase = true)
+                }?.id ?: SupportedBank.OTHER.id
+            }
+            else -> SupportedBank.inferFromCardName(name).id
+        }
         dao.insertCard(
             CreditCardEntity(
                 name = SecuritySanitizer.sanitizeHeaderField(name, 40),
@@ -44,7 +64,8 @@ class CardRepository(private val dao: AppDao) {
                 totalLimit = SecuritySanitizer.validateLimitAmount(totalLimit),
                 closingDay = closingDay.coerceIn(1, 28),
                 dueDay = dueDay.coerceIn(1, 28),
-                defaultHolderId = defaultHolderId
+                defaultHolderId = defaultHolderId,
+                bank = resolvedBank
             )
         )
     }
@@ -54,37 +75,38 @@ class CardRepository(private val dao: AppDao) {
         return dao.countRecentDuplicate(dedupHash, timestamp - 120_000L) > 0
     }
 
-    suspend fun resolveCardForNotification(packageName: String, lastFourDigits: String?): CreditCardEntity? {
+    /**
+     * Associa a notificação a um cartão somente quando o emissor é confirmado:
+     * o banco efetivo do cartão é [CreditCardEntity.bank] ou, para cartões legados com bank "other",
+     * o inferido por palavra inteira do apelido. Mais de um candidato ou emissor não confirmado é
+     * [CardResolution.Ambiguous]; nunca escolhe um cartão arbitrariamente.
+     */
+    suspend fun resolveCard(packageName: String, lastFourDigits: String?): CardResolution {
+        val targetBank = SupportedBank.fromPackageName(packageName)
+        if (targetBank == SupportedBank.OTHER) return CardResolution.Ambiguous
+
         val cards = dao.getAllCardsSnapshot()
-        if (cards.isEmpty()) return null
+        if (cards.isEmpty()) return CardResolution.NoMatch
 
-        if (lastFourDigits != null) {
-            val matchingDigits = cards.filter { it.lastFourDigits == lastFourDigits }
-            if (matchingDigits.isEmpty()) return null
-            if (matchingDigits.size == 1) return matchingDigits.first()
+        val candidates = if (lastFourDigits != null) cards.filter { it.lastFourDigits == lastFourDigits } else cards
+        if (candidates.isEmpty()) return CardResolution.NoMatch
 
-            val bankKeywords = when (packageName) {
-                "com.nu.production" -> listOf("nu", "nubank")
-                "br.com.intermedium" -> listOf("inter")
-                "com.itau", "com.itaucard.activity" -> listOf("itau", "itaú")
-                "com.c6bank.app" -> listOf("c6")
-                "com.santander.app", "br.com.santander.way" -> listOf("santander")
-                "com.bradesco", "br.com.bradesco.cartoes" -> listOf("bradesco")
-                "br.gov.caixa.cartoes" -> listOf("caixa")
-                "com.picpay" -> listOf("picpay")
-                "com.mercadopago.wallet" -> listOf("mercado", "mercadopago")
-                else -> emptyList()
+        // Sem final informado, só vale se houver exatamente um cartão cadastrado.
+        if (lastFourDigits == null && candidates.size != 1) return CardResolution.Ambiguous
+
+        val confirmed = candidates.filter { card ->
+            val effectiveBank = if (card.bank != SupportedBank.OTHER.id) {
+                SupportedBank.fromId(card.bank)
+            } else {
+                SupportedBank.inferFromCardName(card.name)
             }
-
-            val matchingBank = matchingDigits.filter { card ->
-                val cardNameLower = card.name.lowercase()
-                bankKeywords.any { cardNameLower.contains(it) }
-            }
-            return matchingBank.singleOrNull()
-        } else {
-            return cards.singleOrNull()
+            effectiveBank == targetBank
         }
+        return confirmed.singleOrNull()?.let { CardResolution.Found(it) } ?: CardResolution.Ambiguous
     }
+
+    suspend fun resolveCardForNotification(packageName: String, lastFourDigits: String?): CreditCardEntity? =
+        (resolveCard(packageName, lastFourDigits) as? CardResolution.Found)?.card
 
     suspend fun processBankNotification(
         packageName: String,

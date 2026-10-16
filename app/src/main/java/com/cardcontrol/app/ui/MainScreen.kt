@@ -675,6 +675,8 @@ fun MainScreen(
         var closing by remember { mutableStateOf("10") }
         var due by remember { mutableStateOf("17") }
         var defaultHolderId by remember { mutableStateOf(state.holders.firstOrNull()?.id) }
+        val issuers = com.cardcontrol.app.service.BankNotificationParser.SUPPORTED_ISSUERS
+        var issuerIndex by remember { mutableStateOf<Long?>(null) }
 
         AlertDialog(
             onDismissRequest = { showCardDialog = false },
@@ -696,6 +698,10 @@ fun MainScreen(
                         Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                             LiquidPillSelector(options = state.holders.map { it.id to it.name }, selectedId = defaultHolderId, onSelect = { defaultHolderId = it })
                         }
+                    }
+                    Text("Banco emissor (necessário para captura automática):", style = MaterialTheme.typography.labelMedium, color = GlassPalette.TextSecondary)
+                    Box(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                        LiquidPillSelector(options = issuers.mapIndexed { i, b -> i.toLong() to b }, selectedId = issuerIndex, onSelect = { issuerIndex = it })
                     }
                     GlassTextField(
                         value = name,
@@ -759,7 +765,8 @@ fun MainScreen(
                                 limit = limitCents,
                                 closing = closing.toIntOrNull() ?: 10,
                                 due = due.toIntOrNull() ?: 17,
-                                defaultHolderId = defaultHolderId
+                                defaultHolderId = defaultHolderId,
+                                issuerBank = issuerIndex?.let { issuers.getOrNull(it.toInt()) }
                             )
                             showCardDialog = false
                         }
