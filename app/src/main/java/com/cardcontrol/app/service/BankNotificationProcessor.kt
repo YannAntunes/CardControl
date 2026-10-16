@@ -4,6 +4,7 @@ import com.cardcontrol.app.data.local.AppDao
 import com.cardcontrol.app.data.local.CreditCardEntity
 import com.cardcontrol.app.data.local.HolderEntity
 import com.cardcontrol.app.data.repository.CardRepository
+import com.cardcontrol.app.data.repository.CardResolution
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -58,9 +59,10 @@ class BankNotificationProcessor(
                 return@withLock AutoCaptureResult.Ignored(IgnoreReason.DUPLICATE)
             }
 
-            val card = when (val resolution = resolveCard(BankNotificationParser.issuerFor(packageName), parsed.lastFourDigits)) {
+            val card = when (val resolution = repository.resolveCard(packageName!!, parsed.lastFourDigits)) {
                 is CardResolution.Found -> resolution.card
-                is CardResolution.Missing -> return@withLock AutoCaptureResult.Ignored(resolution.reason)
+                CardResolution.NoMatch -> return@withLock AutoCaptureResult.Ignored(IgnoreReason.NO_MATCHING_CARD)
+                CardResolution.Ambiguous -> return@withLock AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD)
             }
 
             val holderId = card.defaultHolderId
@@ -78,37 +80,9 @@ class BankNotificationProcessor(
                 isAutoCaptured = true,
                 dedupHash = parsed.dedupHash
             )
+            if (transactionId == -1L) return@withLock AutoCaptureResult.Ignored(IgnoreReason.DUPLICATE)
             AutoCaptureResult.Registered(transactionId, parsed, card, holder)
         }
-    }
-
-    private sealed interface CardResolution {
-        data class Found(val card: CreditCardEntity) : CardResolution
-        data class Missing(val reason: IgnoreReason) : CardResolution
-    }
-
-    /**
-     * Só associa quando o cartão é confirmado pelo emissor da notificação:
-     * - com final: exatamente um cartão com o mesmo final E o mesmo emissor;
-     * - sem final: exatamente um cartão cadastrado, e ele deve ser do mesmo emissor.
-     * Final existente em cartão de outro emissor/sem emissor, ou mais de um candidato, é ambíguo.
-     * Nenhum cartão com o final é "sem correspondência". Nunca escolhe cartão arbitrariamente.
-     */
-    private suspend fun resolveCard(issuer: String?, lastFour: String?): CardResolution {
-        if (issuer == null) return CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
-        if (lastFour != null) {
-            val sameLastFour = dao.getCardsByLastFour(lastFour)
-            if (sameLastFour.isEmpty()) return CardResolution.Missing(IgnoreReason.NO_MATCHING_CARD)
-            val confirmed = sameLastFour.filter { it.issuerBank == issuer }
-            return when (confirmed.size) {
-                1 -> CardResolution.Found(confirmed.single())
-                else -> CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
-            }
-        }
-        if (dao.countCards() != 1) return CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
-        val single = dao.getFirstCard() ?: return CardResolution.Missing(IgnoreReason.NO_MATCHING_CARD)
-        if (single.issuerBank != issuer) return CardResolution.Missing(IgnoreReason.AMBIGUOUS_CARD)
-        return CardResolution.Found(single)
     }
 
     private companion object {

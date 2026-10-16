@@ -1,4 +1,4 @@
-version: "2.1.0"
+version: "2.2.0"
 project: "CardControl"
 engine: "Android Native (Kotlin + Compose + Room)"
 
@@ -44,6 +44,20 @@ tasks:
     status: "COMPLETED"
     owner: "UI/UX"
     verification: "GlassTextField with KeyboardType.Number, Decimal, Phone, Email"
+
+  - id: "TASK-010"
+    title: "Hardening de integridade contábil (centavos Long), concorrência e exportação de schemas Room v3"
+    status: "COMPLETED"
+    owner: "Security / Core Data"
+    dependencies: ["TASK-001", "TASK-002", "TASK-003"]
+    verification: "Room v3 migration, MoneyUtils cents conversion, canary test PASS and concurrency harness"
+
+  - id: "TASK-011"
+    title: "Adaptação e saneamento do repositório para Release v2.2.0 (version bump, utilitário de keystore, workflow_dispatch e documentação)"
+    status: "COMPLETED"
+    owner: "DevOps / Security"
+    dependencies: ["TASK-006", "TASK-010"]
+    verification: "test_bundle_canary.py (28 canários PASS), bump v2.2.0, release.yml workflow_dispatch e documentação alinhada"
 
   - id: "TASK-008"
     title: "Detecção e conciliação automática de Pix recebido para abatimento"

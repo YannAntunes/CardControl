@@ -1,7 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+}
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun findPropertyOrEnv(key: String): String? {
+    return System.getenv(key) ?: localProperties.getProperty(key)
 }
 
 android {
@@ -12,8 +25,8 @@ android {
         applicationId = "com.cardcontrol.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "2.1.0"
+        versionCode = 4
+        versionName = "2.2.0"
     }
 
     buildFeatures { compose = true }
@@ -25,10 +38,36 @@ android {
         }
     }
 
+    signingConfigs {
+        val keystorePath = findPropertyOrEnv("CARDCONTROL_KEYSTORE_PATH")
+        val keystorePassword = findPropertyOrEnv("CARDCONTROL_KEYSTORE_PASSWORD")
+        val keyAliasValue = findPropertyOrEnv("CARDCONTROL_KEY_ALIAS")
+        val keyPasswordValue = findPropertyOrEnv("CARDCONTROL_KEY_PASSWORD")
+
+        val hasReleaseSigning = !keystorePath.isNullOrBlank() &&
+                !keystorePassword.isNullOrBlank() &&
+                !keyAliasValue.isNullOrBlank() &&
+                !keyPasswordValue.isNullOrBlank() &&
+                file(keystorePath).exists()
+
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Release signing remains disabled until the exposed key is rotated safely.
+            signingConfig = signingConfigs.findByName("release")
+        }
+        debug {
         }
         // Debug uses Android's generated debug key; never use production signing material here.
     }
@@ -61,4 +100,8 @@ dependencies {
     implementation("com.sun.mail:android-activation:1.6.8")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

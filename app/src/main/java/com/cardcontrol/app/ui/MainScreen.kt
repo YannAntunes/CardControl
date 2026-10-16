@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cardcontrol.app.ui.theme.*
+import com.cardcontrol.app.util.MoneyUtils
 import com.cardcontrol.app.util.ReportEngine
 
 @Composable
@@ -166,8 +167,8 @@ fun MainScreen(
             Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
                 when (selectedTab) {
                     0 -> {
-                        val remainingInvoice = (state.totalMonthInvoice - state.totalMonthPaid).coerceAtLeast(0.0)
-                        val paidRatio = if (state.totalMonthInvoice > 0) (state.totalMonthPaid / state.totalMonthInvoice).toFloat() else 0f
+                        val remainingInvoice = (state.totalMonthInvoice - state.totalMonthPaid).coerceAtLeast(0L)
+                        val paidRatio = if (state.totalMonthInvoice > 0L) (state.totalMonthPaid.toFloat() / state.totalMonthInvoice.toFloat()) else 0f
 
                         Box(
                             modifier = Modifier
@@ -237,7 +238,7 @@ fun MainScreen(
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
                                 items(state.holderSummaries, key = { it.holder.id }) { item ->
                                     val isExpanded = expandedHolderId == item.holder.id
-                                    val usageRatio = if (item.holder.subLimit > 0) (item.globalCommitted / item.holder.subLimit).toFloat() else 0f
+                                    val usageRatio = if (item.holder.subLimit > 0L) (item.globalCommitted.toFloat() / item.holder.subLimit.toFloat()) else 0f
                                     val barColor = when {
                                         usageRatio >= 1f -> GlassPalette.CoralDanger
                                         usageRatio >= 0.8f -> GlassPalette.AmberWarn
@@ -278,7 +279,7 @@ fun MainScreen(
                                                 }
                                             }
 
-                                            if (item.holder.subLimit > 0) {
+                                            if (item.holder.subLimit > 0L) {
                                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                                     Text("Sublimite Livre: ${ReportEngine.formatCurrency(item.availableSubLimit)}", style = MaterialTheme.typography.labelSmall, color = GlassPalette.TextSecondary)
                                                     Text("Teto: ${ReportEngine.formatCurrency(item.holder.subLimit)}", style = MaterialTheme.typography.labelSmall, color = GlassPalette.TextSecondary)
@@ -294,8 +295,8 @@ fun MainScreen(
                                                     } else {
                                                         item.monthlyInstallments.forEach { inst ->
                                                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                                Text("• ${inst.merchantSnapshot} (${inst.installmentNumber}/${inst.totalInstallments})", style = MaterialTheme.typography.bodySmall, color = GlassPalette.TextPrimary)
-                                                                Text(ReportEngine.formatCurrency(inst.amount), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = GlassPalette.CyanGlow)
+                                                                 Text("• ${inst.merchantSnapshot} (${inst.installmentNumber}/${inst.totalInstallments})", style = MaterialTheme.typography.bodySmall, color = GlassPalette.TextPrimary)
+                                                                 Text(ReportEngine.formatCurrency(inst.amount), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = GlassPalette.CyanGlow)
                                                             }
                                                         }
                                                     }
@@ -328,7 +329,7 @@ fun MainScreen(
                         } else {
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
                                 items(state.cardSummaries, key = { it.card.id }) { item ->
-                                    val ratio = if (item.card.totalLimit > 0) (item.globalCommitted / item.card.totalLimit).toFloat() else 0f
+                                    val ratio = if (item.card.totalLimit > 0L) (item.globalCommitted.toFloat() / item.card.totalLimit.toFloat()) else 0f
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -502,8 +503,8 @@ fun MainScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val v = amount.replace(",", ".").toDoubleOrNull() ?: 0.0
-                        if (merchant.isNotBlank() && v > 0) {
+                        val v = MoneyUtils.parseToCents(amount) ?: 0L
+                        if (merchant.isNotBlank() && v > 0L) {
                             viewModel.addExpense(selectedCardId, selectedHolderId, merchant, v, (parcels.toIntOrNull() ?: 1).coerceIn(1, 72))
                             showExpenseDialog = false
                         }
@@ -574,8 +575,8 @@ fun MainScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val v = amount.replace(",", ".").toDoubleOrNull() ?: 0.0
-                        if (v > 0) {
+                        val v = MoneyUtils.parseToCents(amount) ?: 0L
+                        if (v > 0L) {
                             viewModel.addPayment(selectedHolderId, selectedCardId, v, notes)
                             showPaymentDialog = false
                         }
@@ -653,7 +654,8 @@ fun MainScreen(
                 Button(
                     onClick = {
                         if (name.isNotBlank()) {
-                            viewModel.addHolder(name, whats, email, subLimit.replace(",", ".").toDoubleOrNull() ?: 0.0)
+                            val subLimitCents = MoneyUtils.parseToCents(subLimit) ?: 0L
+                            viewModel.addHolder(name, whats, email, subLimitCents)
                             showHolderDialog = false
                         }
                     },
@@ -756,10 +758,11 @@ fun MainScreen(
                 Button(
                     onClick = {
                         if (name.isNotBlank() && lastFour.isNotBlank()) {
+                            val limitCents = MoneyUtils.parseToCents(limit) ?: 0L
                             viewModel.addCard(
                                 name = name,
                                 lastFour = lastFour,
-                                limit = limit.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                limit = limitCents,
                                 closing = closing.toIntOrNull() ?: 10,
                                 due = due.toIntOrNull() ?: 17,
                                 defaultHolderId = defaultHolderId,

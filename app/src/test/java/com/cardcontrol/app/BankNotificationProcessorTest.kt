@@ -40,8 +40,8 @@ class BankNotificationProcessorTest {
         return dao
     }
 
-    private val cardAna = CreditCardEntity(id = 10, name = "Nu Ana", lastFourDigits = "4321", totalLimit = 5000.0, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Nubank")
-    private val cardItau = CreditCardEntity(id = 20, name = "Itaú Ana", lastFourDigits = "9988", totalLimit = 9000.0, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Itaú")
+    private val cardAna = CreditCardEntity(id = 10, name = "Nu Ana", lastFourDigits = "4321", totalLimit = 500_000L, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Nubank")
+    private val cardItau = CreditCardEntity(id = 20, name = "Itaú Ana", lastFourDigits = "9988", totalLimit = 900_000L, closingDay = 5, dueDay = 12, defaultHolderId = 1, issuerBank = "Itaú")
 
     @Test
     fun `finais iguais em bancos diferentes sao associados pelo banco da notificacao`() = runBlocking {
@@ -74,8 +74,23 @@ class BankNotificationProcessorTest {
     }
 
     @Test
-    fun `cartao sem emissor confirmado nao e associado por notificacao`() = runBlocking {
-        val dao = daoWith(cardAna.copy(issuerBank = null))
+    fun `cartao sem emissor e sem banco no apelido nao e associado por notificacao`() = runBlocking {
+        val dao = daoWith(cardAna.copy(name = "Cartao Ana", issuerBank = null))
+        val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
+        assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
+        assertTrue(dao.transactions.isEmpty())
+    }
+
+    @Test
+    fun `cartao legado sem emissor mas com banco no apelido e confirmado`() = runBlocking {
+        val dao = daoWith(cardAna.copy(name = "Meu Nubank", issuerBank = null))
+        val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
+        assertTrue(result is AutoCaptureResult.Registered)
+    }
+
+    @Test
+    fun `cartao legado com apelido de outro banco nao recebe a compra`() = runBlocking {
+        val dao = daoWith(cardAna.copy(name = "Meu Itau", issuerBank = null))
         val result = BankNotificationProcessor(dao).process("com.nu.production", "Compra aprovada", nubankText, postTime)
         assertEquals(AutoCaptureResult.Ignored(IgnoreReason.AMBIGUOUS_CARD), result)
         assertTrue(dao.transactions.isEmpty())
@@ -132,14 +147,14 @@ class BankNotificationProcessorTest {
         assertEquals(20L, tx.cardId)
         assertEquals(1L, tx.holderId)
         assertEquals("AMAZON BR", tx.merchant)
-        assertEquals(1850.00, tx.totalAmount, 0.0)
+        assertEquals(185_000L, tx.totalAmount)
         assertEquals(10, tx.installmentsCount)
         assertEquals(postTime, tx.purchaseTimestamp)
         assertTrue(tx.isAutoCaptured)
         assertEquals(result.expense.dedupHash, tx.dedupHash)
 
         assertEquals(10, dao.installments.size)
-        val totalCents = dao.installments.sumOf { BigDecimal.valueOf(it.amount).movePointRight(2).longValueExact() }
+        val totalCents = dao.installments.sumOf { it.amount }
         assertEquals(185_000L, totalCents)
         assertTrue(dao.installments.all { it.cardId == 20L && it.holderId == 1L && it.merchantSnapshot == "AMAZON BR" })
     }
@@ -152,7 +167,7 @@ class BankNotificationProcessorTest {
             "Compra aprovada de R$ 1.000,01 em LOJA CENTRO em 7x cartão final 4321.",
             postTime
         )
-        val totalCents = dao.installments.sumOf { BigDecimal.valueOf(it.amount).movePointRight(2).longValueExact() }
+        val totalCents = dao.installments.sumOf { it.amount }
         assertEquals(100_001L, totalCents)
         assertEquals(7, dao.installments.size)
     }
@@ -251,10 +266,8 @@ class BankNotificationProcessorTest {
         override suspend fun getHolderById(id: Long): HolderEntity? = holders.firstOrNull { it.id == id }
         override suspend fun insertCard(card: CreditCardEntity): Long { cards += card; return card.id }
         override fun observeCards(): Flow<List<CreditCardEntity>> = flowOf(cards.toList())
-        override suspend fun getCardsByLastFour(lastFour: String): List<CreditCardEntity> = cards.filter { it.lastFourDigits == lastFour }
+        override suspend fun getAllCardsSnapshot(): List<CreditCardEntity> = cards.toList()
         override suspend fun getCardById(id: Long): CreditCardEntity? = cards.firstOrNull { it.id == id }
-        override suspend fun getFirstCard(): CreditCardEntity? = cards.firstOrNull()
-        override suspend fun countCards(): Int = cards.size
         override suspend fun insertTransaction(tx: TransactionEntity): Long {
             val id = transactions.size + 1L
             transactions += tx.copy(id = id)
@@ -274,9 +287,9 @@ class BankNotificationProcessorTest {
         override fun observePaymentsByPeriod(month: Int, year: Int): Flow<List<PaymentEntity>> =
             flowOf(payments.filter { it.refMonth == month && it.refYear == year })
         override fun observeAllPayments(): Flow<List<PaymentEntity>> = flowOf(payments.toList())
-        override suspend fun getTotalHistoricalSpentByHolder(holderId: Long): Double =
+        override suspend fun getTotalHistoricalSpentByHolder(holderId: Long): Long =
             installments.filter { it.holderId == holderId }.sumOf { it.amount }
-        override suspend fun getTotalHistoricalPaidByHolder(holderId: Long): Double =
+        override suspend fun getTotalHistoricalPaidByHolder(holderId: Long): Long =
             payments.filter { it.holderId == holderId }.sumOf { it.amountPaid }
     }
 }

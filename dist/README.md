@@ -1,16 +1,16 @@
-# Aviso de segurança: distribuição v2.1.0 retirada
+# Histórico de Distribuição e Integridade de Binários
 
-**Não instale nem redistribua o APK v2.1.0 deste repositório ou da página de Releases.**
+## 1. Status da Versão v2.1.0 (Revogada)
 
-Em 15/10/2026, foi identificado que a chave privada de assinatura e as senhas de release estavam versionadas publicamente. O APK v2.1.0 foi assinado com esse material e deve ser tratado como potencialmente comprometido.
+O APK correspondente à versão **v2.1.0 foi permanentemente retirado e descontinuado**.
 
-O arquivo APK e o checksum correspondente foram removidos da árvore atual do Git. A assinatura de novos releases permanece desativada enquanto a equipe define uma estratégia segura para a rotação da chave e a atualização das instalações existentes.
+Em 15/10/2026, foi detectado que a chave privada de assinatura utilizada naquele ciclo foi versionada publicamente no histórico inicial do repositório. Por diretriz de segurança estrita, todo o material criptográfico antigo foi invalidado. Nenhum artefato assinado com aquela chave deve ser executado ou redistribuído.
 
-A remoção do arquivo deste repositório não retira cópias de releases já publicados, clones, forks, caches ou commits antigos. A release v2.1.0 ainda precisa ser retirada manualmente da página Releases do GitHub.
+## 2. Canal Oficial de Distribuição (v2.2.0+)
 
-## Próximos passos antes de voltar a distribuir
+A partir da versão **v2.2.0**, o CardControl adota o seguinte modelo seguro de publicação:
 
-1. Tratar a chave e as senhas antigas como comprometidas e não reutilizá-las.
-2. Avaliar como os usuários existentes receberão atualizações, considerando a compatibilidade da assinatura e a preservação dos dados locais.
-3. Gerar uma nova chave em ambiente privado, configurar os segredos fora do Git e validar a assinatura em dispositivo.
-4. Publicar um novo APK somente após CI, análise estática, verificação da assinatura e teste do caminho de atualização.
+1. **Repositório Git Limpo:** Nenhum executável compilado (`.apk`, `.aab`) reside na árvore de diretórios do Git. O diretório `dist/` é mantido exclusivamente para documentação de integridade.
+2. **Releases Oficiais:** Os lançamentos autenticados são publicados na aba oficial de [Releases do GitHub](https://github.com/kauankelvin7/CardControl/releases).
+3. **Assinatura Isolada:** A compilação e assinatura de produção são executadas pelo pipeline automatizado do GitHub Actions utilizando segredos criptografados de repositório fora do alcance do código-fonte.
+4. **Verificação de Checksum:** Cada release é acompanhada por um arquivo `SHA256SUMS.txt` gerado diretamente na máquina de compilação para conferência contra adulterações.

@@ -35,7 +35,6 @@ class BankNotificationParserTest {
         )
         assertEquals("Nubank", r.bankName)
         assertEquals(4590L, r.amountCents)
-        assertEquals(45.90, r.amount, 0.0)
         assertEquals("PADARIA CENTRAL", r.merchant)
         assertEquals(1, r.installments)
         assertEquals("4321", r.lastFourDigits)
@@ -196,7 +195,6 @@ class BankNotificationParserTest {
             "Compra aprovada de R$ 1.234,57 em LOJA CENTRO cartão final 4321."
         )
         assertEquals(123_457L, r.amountCents)
-        assertEquals(1234.57, r.amount, 0.0)
     }
 
     @Test

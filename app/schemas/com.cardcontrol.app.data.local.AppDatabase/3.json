@@ -1,0 +1,516 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "6e87c036f2712252cf161b42e0f6f8b4",
+    "entities": [
+      {
+        "tableName": "holders",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `whatsapp` TEXT NOT NULL, `email` TEXT NOT NULL, `subLimit` INTEGER NOT NULL, `notifyByEmailOnPurchase` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "whatsapp",
+            "columnName": "whatsapp",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "email",
+            "columnName": "email",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subLimit",
+            "columnName": "subLimit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyByEmailOnPurchase",
+            "columnName": "notifyByEmailOnPurchase",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "credit_cards",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `lastFourDigits` TEXT NOT NULL, `totalLimit` INTEGER NOT NULL, `closingDay` INTEGER NOT NULL, `dueDay` INTEGER NOT NULL, `defaultHolderId` INTEGER, FOREIGN KEY(`defaultHolderId`) REFERENCES `holders`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastFourDigits",
+            "columnName": "lastFourDigits",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalLimit",
+            "columnName": "totalLimit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "closingDay",
+            "columnName": "closingDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dueDay",
+            "columnName": "dueDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "defaultHolderId",
+            "columnName": "defaultHolderId",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_credit_cards_defaultHolderId",
+            "unique": false,
+            "columnNames": [
+              "defaultHolderId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_credit_cards_defaultHolderId` ON `${TABLE_NAME}` (`defaultHolderId`)"
+          },
+          {
+            "name": "index_credit_cards_lastFourDigits",
+            "unique": false,
+            "columnNames": [
+              "lastFourDigits"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_credit_cards_lastFourDigits` ON `${TABLE_NAME}` (`lastFourDigits`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "holders",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "defaultHolderId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cardId` INTEGER NOT NULL, `holderId` INTEGER NOT NULL, `merchant` TEXT NOT NULL, `totalAmount` INTEGER NOT NULL, `installmentsCount` INTEGER NOT NULL, `purchaseTimestamp` INTEGER NOT NULL, `isAutoCaptured` INTEGER NOT NULL, `dedupHash` TEXT NOT NULL, FOREIGN KEY(`cardId`) REFERENCES `credit_cards`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`holderId`) REFERENCES `holders`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cardId",
+            "columnName": "cardId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "holderId",
+            "columnName": "holderId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "merchant",
+            "columnName": "merchant",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalAmount",
+            "columnName": "totalAmount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "installmentsCount",
+            "columnName": "installmentsCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "purchaseTimestamp",
+            "columnName": "purchaseTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAutoCaptured",
+            "columnName": "isAutoCaptured",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dedupHash",
+            "columnName": "dedupHash",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_transactions_cardId",
+            "unique": false,
+            "columnNames": [
+              "cardId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_cardId` ON `${TABLE_NAME}` (`cardId`)"
+          },
+          {
+            "name": "index_transactions_holderId",
+            "unique": false,
+            "columnNames": [
+              "holderId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_holderId` ON `${TABLE_NAME}` (`holderId`)"
+          },
+          {
+            "name": "index_transactions_dedupHash",
+            "unique": false,
+            "columnNames": [
+              "dedupHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_dedupHash` ON `${TABLE_NAME}` (`dedupHash`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "credit_cards",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "cardId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "holders",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "holderId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "installments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `transactionId` INTEGER NOT NULL, `holderId` INTEGER NOT NULL, `cardId` INTEGER NOT NULL, `merchantSnapshot` TEXT NOT NULL, `installmentNumber` INTEGER NOT NULL, `totalInstallments` INTEGER NOT NULL, `amount` INTEGER NOT NULL, `refMonth` INTEGER NOT NULL, `refYear` INTEGER NOT NULL, `purchaseTimestamp` INTEGER NOT NULL, FOREIGN KEY(`transactionId`) REFERENCES `transactions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`holderId`) REFERENCES `holders`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`cardId`) REFERENCES `credit_cards`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transactionId",
+            "columnName": "transactionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "holderId",
+            "columnName": "holderId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cardId",
+            "columnName": "cardId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "merchantSnapshot",
+            "columnName": "merchantSnapshot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "installmentNumber",
+            "columnName": "installmentNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalInstallments",
+            "columnName": "totalInstallments",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "amount",
+            "columnName": "amount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refMonth",
+            "columnName": "refMonth",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refYear",
+            "columnName": "refYear",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "purchaseTimestamp",
+            "columnName": "purchaseTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_installments_transactionId",
+            "unique": false,
+            "columnNames": [
+              "transactionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_installments_transactionId` ON `${TABLE_NAME}` (`transactionId`)"
+          },
+          {
+            "name": "index_installments_holderId",
+            "unique": false,
+            "columnNames": [
+              "holderId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_installments_holderId` ON `${TABLE_NAME}` (`holderId`)"
+          },
+          {
+            "name": "index_installments_cardId",
+            "unique": false,
+            "columnNames": [
+              "cardId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_installments_cardId` ON `${TABLE_NAME}` (`cardId`)"
+          },
+          {
+            "name": "index_installments_refMonth_refYear",
+            "unique": false,
+            "columnNames": [
+              "refMonth",
+              "refYear"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_installments_refMonth_refYear` ON `${TABLE_NAME}` (`refMonth`, `refYear`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "transactions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "transactionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "holders",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "holderId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "credit_cards",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "cardId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "payments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `holderId` INTEGER NOT NULL, `cardId` INTEGER, `amountPaid` INTEGER NOT NULL, `refMonth` INTEGER NOT NULL, `refYear` INTEGER NOT NULL, `paymentTimestamp` INTEGER NOT NULL, `notes` TEXT NOT NULL, FOREIGN KEY(`holderId`) REFERENCES `holders`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "holderId",
+            "columnName": "holderId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cardId",
+            "columnName": "cardId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "amountPaid",
+            "columnName": "amountPaid",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refMonth",
+            "columnName": "refMonth",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refYear",
+            "columnName": "refYear",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paymentTimestamp",
+            "columnName": "paymentTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_payments_holderId",
+            "unique": false,
+            "columnNames": [
+              "holderId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_payments_holderId` ON `${TABLE_NAME}` (`holderId`)"
+          },
+          {
+            "name": "index_payments_refMonth_refYear",
+            "unique": false,
+            "columnNames": [
+              "refMonth",
+              "refYear"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_payments_refMonth_refYear` ON `${TABLE_NAME}` (`refMonth`, `refYear`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "holders",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "holderId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e87c036f2712252cf161b42e0f6f8b4')"
+    ]
+  }
+}

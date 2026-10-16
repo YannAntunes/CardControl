@@ -38,12 +38,13 @@ class BankNotificationListener : NotificationListenerService() {
             val holder = result.holder
             val card = result.card
             val expense = result.expense
+
             if (holder.notifyByEmailOnPurchase && holder.email.isNotBlank()) {
                 val creds = CredentialStore(applicationContext)
                 if (creds.isConfigured()) {
                     val totalSpent = dao.getTotalHistoricalSpentByHolder(holder.id)
                     val totalPaid = dao.getTotalHistoricalPaidByHolder(holder.id)
-                    val currentDebt = (totalSpent - totalPaid).coerceAtLeast(0.0)
+                    val currentDebt = (totalSpent - totalPaid).coerceAtLeast(0L)
                     val remainingSubLimit = holder.subLimit - currentDebt
 
                     ReportEngine.sendInstantPurchaseEmail(

@@ -10,18 +10,18 @@ import java.util.Locale
 /**
  * Resultado de uma notificação bancária reconhecida, com segurança, como compra no cartão.
  *
- * [amountCents] é a fonte exata do valor (sem perda de centavos); [amount] é derivado dele
- * para o contrato existente de [com.cardcontrol.app.data.repository.CardRepository.registerExpense].
+ * [amount] é o valor exato em centavos (contrato de [com.cardcontrol.app.data.repository.CardRepository.registerExpense]);
+ * [amountCents] é um alias semântico.
  */
 data class ParsedBankExpense(
     val bankName: String,
-    val amountCents: Long,
+    val amount: Long,
     val merchant: String,
     val lastFourDigits: String?,
     val installments: Int,
     val dedupHash: String
 ) {
-    val amount: Double get() = BigDecimal.valueOf(amountCents, 2).toDouble()
+    val amountCents: Long get() = amount
 }
 
 /**
@@ -66,11 +66,21 @@ object BankNotificationParser {
             """|voce\s+comprou"""
     )
 
+    /** Contextos que nunca são compra, em qualquer posição do texto. */
     private val IGNORED_CONTEXT_REGEX = Regex(
         """\b(?:negada|recusada|nao\s+aprovada|nao\s+autorizada|estorn\w*|cancelad\w*|cancelamento""" +
-            """|reembolso|devolucao|devolvid\w*|fatura|cashback|oferta\w*|promoc\w*|desconto\w*""" +
+            """|reembolso|devolucao|devolvid\w*|fatura""" +
             """|aumento\s+de\s+limite|novo\s+limite|limite\s+aumentado|emprestimo|pix|transferencia""" +
-            """|boleto|saque|codigo\s+de\s+verificacao|token|senha)\b"""
+            """|boleto|saque|codigo\s+de\s+(?:verificacao|seguranca)|token\s+de\s+seguranca|seu\s+token|senha)\b"""
+    )
+
+    /**
+     * Cashback/oferta/promoção/desconto só descartam a mensagem quando acompanhados de valor ou percentual
+     * ("cashback de R$ 5,00", "10% de desconto"). A palavra isolada pode fazer parte do nome do
+     * estabelecimento ("SUPERMERCADO DA OFERTA") ou de um aviso adicional de compra legítima.
+     */
+    private val PROMOTIONAL_AMOUNT_REGEX = Regex(
+        """\b(?:cashback|oferta\w*|promoc\w*|desconto\w*)\b.{0,30}?(?:r\$|brl|%)|[0-9]\s*%"""
     )
 
     private const val AMOUNT_NUMBER =
@@ -92,7 +102,7 @@ object BankNotificationParser {
     )
 
     private val MERCHANT_REGEX = Regex(
-        """(?:\bem|\bestabelecimento:?|\bloja:?)\s+(?![0-9])([\p{L}\p{N}*&'./\- ]{2,40}?)""" +
+        """(?:\bem|\bno|\bna|\bestabelecimento:?|\bloja:?)\s+(?![0-9])([\p{L}\p{N}*&'./\- ]{2,40}?)""" +
             """(?=\s+(?:em\s+[0-9]|para\b|com\b|no\s+cart|cart[aã]o\b|final\b|no\s+valor|de\s+(?:R\$|BRL)|R\$|BRL|[àa]s\s+[0-9]|aprovad|compra\b)""" +
             """|\s*[.,:;!]\s|\s*[.,:;!]?\s*$)""",
         RegexOption.IGNORE_CASE
@@ -114,7 +124,30 @@ object BankNotificationParser {
     /** Emissores que podem ser vinculados a um cartão, na ordem de [SUPPORTED_BANKS]. */
     val SUPPORTED_ISSUERS: List<String> get() = SUPPORTED_BANKS.keys.mapNotNull { issuerFor(it) }.distinct()
 
-    fun parse(packageName: String?, title: String?, text: String?): ParsedBankExpense? {
+    private val ISSUER_NAME_KEYWORDS: Map<String, List<String>> = mapOf(
+        "Nubank" to listOf("nu", "nubank"),
+        "Inter" to listOf("inter"),
+        "Itaú" to listOf("itau", "itaucard"),
+        "C6 Bank" to listOf("c6", "c6bank"),
+        "Santander" to listOf("santander"),
+        "Bradesco" to listOf("bradesco"),
+        "Caixa" to listOf("caixa"),
+        "PicPay" to listOf("picpay"),
+        "Mercado Pago" to listOf("mercado", "mercadopago")
+    )
+
+    /**
+     * Infere o emissor de um cartão legado (sem emissor gravado) pelo apelido, apenas por palavra inteira.
+     * Retorna nulo se nenhum ou mais de um emissor for reconhecido: nesse caso o cartão não é confirmado.
+     */
+    fun issuerFromCardName(cardName: String): String? {
+        val tokens = normalize(cardName).split(Regex("""[^a-z0-9]+""")).filter { it.isNotEmpty() }.toSet()
+        val matches = ISSUER_NAME_KEYWORDS.filterValues { keywords -> keywords.any { it in tokens } }.keys
+        return matches.singleOrNull()
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    fun parse(packageName: String?, title: String?, text: String?, timestamp: Long = 0L): ParsedBankExpense? {
         if (packageName == null) return null
         val bankName = SUPPORTED_BANKS[packageName] ?: return null
 
@@ -128,6 +161,7 @@ object BankNotificationParser {
 
         val normalized = normalize(content)
         if (IGNORED_CONTEXT_REGEX.containsMatchIn(normalized)) return null
+        if (PROMOTIONAL_AMOUNT_REGEX.containsMatchIn(normalized)) return null
         if (!PURCHASE_TRIGGER_REGEX.containsMatchIn(normalized)) return null
 
         val amountCents = extractPurchaseAmountCents(content) ?: return null
@@ -139,7 +173,7 @@ object BankNotificationParser {
 
         return ParsedBankExpense(
             bankName = bankName,
-            amountCents = amountCents,
+            amount = amountCents,
             merchant = merchant,
             lastFourDigits = lastFour.value,
             installments = installments,

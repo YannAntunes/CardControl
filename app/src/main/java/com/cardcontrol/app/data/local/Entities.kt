@@ -11,7 +11,7 @@ data class HolderEntity(
     val name: String,
     val whatsapp: String,
     val email: String = "",
-    val subLimit: Double = 0.0,
+    val subLimit: Long = 0L,
     val notifyByEmailOnPurchase: Boolean = true
 )
 
@@ -31,7 +31,7 @@ data class CreditCardEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val lastFourDigits: String,
-    val totalLimit: Double,
+    val totalLimit: Long,
     val closingDay: Int,
     val dueDay: Int,
     val defaultHolderId: Long?,
@@ -52,7 +52,7 @@ data class TransactionEntity(
     val cardId: Long,
     val holderId: Long,
     val merchant: String,
-    val totalAmount: Double,
+    val totalAmount: Long,
     val installmentsCount: Int = 1,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
     val isAutoCaptured: Boolean = false,
@@ -76,7 +76,7 @@ data class InstallmentEntity(
     val merchantSnapshot: String,
     val installmentNumber: Int,
     val totalInstallments: Int,
-    val amount: Double,
+    val amount: Long,
     val refMonth: Int,
     val refYear: Int,
     val purchaseTimestamp: Long
@@ -93,7 +93,7 @@ data class PaymentEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val holderId: Long,
     val cardId: Long? = null,
-    val amountPaid: Double,
+    val amountPaid: Long,
     val refMonth: Int,
     val refYear: Int,
     val paymentTimestamp: Long = System.currentTimeMillis(),
