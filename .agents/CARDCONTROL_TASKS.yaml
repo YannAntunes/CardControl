@@ -4,19 +4,19 @@ engine: "Android Native (Kotlin + Compose + Room)"
 
 tasks:
   - id: "TASK-001"
-    title: "Implementação da fundação offline-first e Room SQLite"
+    title: "ImplementaÃ§Ã£o da fundaÃ§Ã£o offline-first e Room SQLite"
     status: "COMPLETED"
     owner: "Core Data"
     verification: "Room KSP compilation and AppDatabase entities test"
 
   - id: "TASK-002"
-    title: "Motor de parsing de notificações bancárias e deduplicação SHA-256"
+    title: "Motor de parsing de notificaÃ§Ãµes bancÃ¡rias e deduplicaÃ§Ã£o SHA-256"
     status: "COMPLETED"
     owner: "Service Engine"
     verification: "SecurityAndDomainTestHarness assertions"
 
   - id: "TASK-003"
-    title: "Proteção contra CRLF injection, Path Traversal e ReDoS"
+    title: "ProteÃ§Ã£o contra CRLF injection, Path Traversal e ReDoS"
     status: "COMPLETED"
     owner: "Security"
     verification: "SecuritySanitizer tests PASS"
@@ -40,48 +40,55 @@ tasks:
     verification: "apksigner verify with CN=CardControl certificate"
 
   - id: "TASK-007"
-    title: "Aprimoramento de formulários, teclados numéricos e suporte a senha"
+    title: "Aprimoramento de formulÃ¡rios, teclados numÃ©ricos e suporte a senha"
     status: "COMPLETED"
     owner: "UI/UX"
     verification: "GlassTextField with KeyboardType.Number, Decimal, Phone, Email"
 
   - id: "TASK-010"
-    title: "Hardening de integridade contábil (centavos Long), concorrência e exportação de schemas Room v3"
+    title: "Hardening de integridade contÃ¡bil (centavos Long), concorrÃªncia e exportaÃ§Ã£o de schemas Room v3"
     status: "COMPLETED"
     owner: "Security / Core Data"
     dependencies: ["TASK-001", "TASK-002", "TASK-003"]
     verification: "Room v3 migration, MoneyUtils cents conversion, canary test PASS and concurrency harness"
 
   - id: "TASK-011"
-    title: "Adaptação e saneamento do repositório para Release v2.2.0 (version bump, utilitário de keystore, workflow_dispatch e documentação)"
+    title: "AdaptaÃ§Ã£o e saneamento do repositÃ³rio para Release v2.2.0 (version bump, utilitÃ¡rio de keystore, workflow_dispatch e documentaÃ§Ã£o)"
     status: "COMPLETED"
     owner: "DevOps / Security"
     dependencies: ["TASK-006", "TASK-010"]
-    verification: "test_bundle_canary.py (28 canários PASS), bump v2.2.0, release.yml workflow_dispatch e documentação alinhada"
+    verification: "test_bundle_canary.py (28 canÃ¡rios PASS), bump v2.2.0, release.yml workflow_dispatch e documentaÃ§Ã£o alinhada"
 
   - id: "TASK-012"
-    title: "Identificação explícita de banco emissor, migração Room v4 e desacoplamento da captura automática de compras de cartões renomeados"
+    title: "IdentificaÃ§Ã£o explÃ­cita de banco emissor, migraÃ§Ã£o Room v4 e desacoplamento da captura automÃ¡tica de compras de cartÃµes renomeados"
     status: "COMPLETED"
     owner: "Core Data / UI / Security"
     dependencies: ["TASK-010"]
     verification: "MIGRATION_3_4, KSP schema 4.json, SecurityAndDomainTestHarness assertions (100% PASS), lintDebug e assembleDebug"
 
   - id: "TASK-013"
-    title: "Unificação da governança em .agents, adequação de Graphify, Context Mode e Ponytail e auditoria de estado Leve"
+    title: "UnificaÃ§Ã£o da governanÃ§a em .agents, adequaÃ§Ã£o de Graphify, Context Mode e Ponytail e auditoria de estado Leve"
     status: "COMPLETED"
     owner: "DevOps / Governance"
     dependencies: ["TASK-011", "TASK-012"]
-    verification: "check_state.ps1 (100% PASS), eliminação da pasta .agent, instalação de graphifyy e context-mode"
+    verification: "check_state.ps1 (100% PASS), eliminaÃ§Ã£o da pasta .agent, instalaÃ§Ã£o de graphifyy e context-mode"
+
+  - id: "TASK-014"
+    title: "Endurecimento da assinatura persistente e bloqueio de releases sem fingerprint confiÃ¡vel"
+    status: "COMPLETED"
+    owner: "DevOps / Security"
+    dependencies: ["TASK-011"]
+    verification: "PR #7 e PR #13: testDebugUnitTest, lintDebug e assembleDebug PASS; 28 canarios PASS; PR #7 e PR #13 integrados na main; 4 secrets e 2 variables verificados no GitHub; fingerprint A5:24... confirmado"
 
   - id: "TASK-008"
-    title: "Detecção e conciliação automática de Pix recebido para abatimento"
+    title: "DetecÃ§Ã£o e conciliaÃ§Ã£o automÃ¡tica de Pix recebido para abatimento"
     status: "PENDING"
     owner: "Service Engine"
     dependencies: ["TASK-002"]
     verification: "Unit tests simulating incoming Pix push notifications"
 
   - id: "TASK-009"
-    title: "Backup e exportação local do banco de dados SQLite (JSON/CSV)"
+    title: "Backup e exportaÃ§Ã£o local do banco de dados SQLite (JSON/CSV)"
     status: "PENDING"
     owner: "Core Data"
     dependencies: ["TASK-001"]
