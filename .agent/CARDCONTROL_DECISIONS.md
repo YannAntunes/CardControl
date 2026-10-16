@@ -33,3 +33,11 @@
 - **Contexto:** O keystore de release e as senhas associadas foram versionados em um repositório público. O material deve ser tratado como comprometido.
 - **Decisão anterior:** Um keystore dedicado era usado para assinar APKs distribuídos diretamente e permitir atualizações com a mesma assinatura.
 - **Decisão atual:** Não reutilizar a chave nem as senhas expostas. A assinatura de release está desativada até que o caminho de atualização das instalações existentes seja avaliado, uma nova chave seja gerada e a assinatura passe a usar configuração externa ao Git. Uma nova chave pode impedir a atualização direta de instalações assinadas com a chave anterior; não publicar uma versão até validar a estratégia de migração.
+
+---
+
+## ADR-006: Detecção Offline de Gastos Recorrentes e Assinaturas (Subscription Tracker)
+- **Status:** Aceito
+- **Contexto:** Necessidade de identificar assinaturas e despesas fixas recorrentes (streaming, academias, planos de assinatura) de forma 100% offline, alertando sobre variações de preço ("price creep") e mensurando o impacto percentual no limite total dos cartões.
+- **Decisão:** Criar a entidade `RecurringChargeEntity` e schema Room v5 com migration determinística `MIGRATION_4_5`. O motor `SubscriptionTracker` analisa intervalos de compra entre 28 e 32 dias para transações com mesmo merchant normalizado ou transações manualmente sinalizadas com `isRecurring = true`. A interface `LiquidGlass` no dashboard exibe o comprometimento mensal, o impacto percentual no limite e alerta visual caso haja aumento de valor.
+

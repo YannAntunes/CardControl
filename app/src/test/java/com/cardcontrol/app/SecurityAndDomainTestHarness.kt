@@ -71,6 +71,62 @@ private class FakeAppDao : AppDao {
     override suspend fun getTotalHistoricalPaidByHolder(holderId: Long): Long = synchronized(payments) {
         payments.filter { it.holderId == holderId }.sumOf { it.amountPaid }
     }
+
+    val recurringCharges = Collections.synchronizedList(mutableListOf<com.cardcontrol.app.data.local.RecurringChargeEntity>())
+
+    override suspend fun insertRecurringCharge(charge: com.cardcontrol.app.data.local.RecurringChargeEntity): Long = synchronized(recurringCharges) {
+        recurringCharges.removeAll { it.merchant.equals(charge.merchant, ignoreCase = true) && it.cardId == charge.cardId }
+        val newId = if (charge.id == 0L) (recurringCharges.size + 1).toLong() else charge.id
+        val toAdd = charge.copy(id = newId)
+        recurringCharges.add(toAdd)
+        newId
+    }
+
+    override fun observeActiveRecurringCharges(): Flow<List<com.cardcontrol.app.data.local.RecurringChargeEntity>> = synchronized(recurringCharges) {
+        flowOf(recurringCharges.filter { it.isActive })
+    }
+
+    override fun observeAllRecurringCharges(): Flow<List<com.cardcontrol.app.data.local.RecurringChargeEntity>> = synchronized(recurringCharges) {
+        flowOf(recurringCharges.toList())
+    }
+
+    override suspend fun getAllRecurringChargesSnapshot(): List<com.cardcontrol.app.data.local.RecurringChargeEntity> = synchronized(recurringCharges) {
+        recurringCharges.toList()
+    }
+
+    override suspend fun getRecurringChargeByMerchantAndCard(merchant: String, cardId: Long): com.cardcontrol.app.data.local.RecurringChargeEntity? = synchronized(recurringCharges) {
+        recurringCharges.firstOrNull { it.merchant.equals(merchant, ignoreCase = true) && it.cardId == cardId }
+    }
+
+    override suspend fun setRecurringChargeActive(id: Long, isActive: Boolean) {
+        synchronized(recurringCharges) {
+            val idx = recurringCharges.indexOfFirst { it.id == id }
+            if (idx != -1) {
+                recurringCharges[idx] = recurringCharges[idx].copy(isActive = isActive)
+            }
+        }
+    }
+
+    override suspend fun setTransactionRecurring(transactionId: Long, isRecurring: Boolean) {
+        synchronized(transactions) {
+            val idx = transactions.indexOfFirst { it.id == transactionId }
+            if (idx != -1) {
+                transactions[idx] = transactions[idx].copy(isRecurring = isRecurring)
+            }
+        }
+    }
+
+    override suspend fun getTransactionsByMerchant(merchant: String): List<TransactionEntity> = synchronized(transactions) {
+        transactions.filter { it.merchant.equals(merchant, ignoreCase = true) }.sortedBy { it.purchaseTimestamp }
+    }
+
+    override suspend fun getAllTransactionsSnapshot(): List<TransactionEntity> = synchronized(transactions) {
+        transactions.toList().sortedBy { it.purchaseTimestamp }
+    }
+
+    override suspend fun getTotalActiveRecurringAmount(): Long = synchronized(recurringCharges) {
+        recurringCharges.filter { it.isActive }.sumOf { it.expectedAmount }
+    }
 }
 
 class SecurityAndDomainTestHarness {
@@ -548,5 +604,40 @@ class SecurityAndDomainTestHarness {
         assertTrue(tx3 > 0L)
         assertNotNull(card3)
         assertEquals("DROGARIA CENTRAL", fakeDao.transactions.last().merchant)
+    }
+
+    @Test
+    fun `harness deve sincronizar e persistir cobrancas recorrentes atraves do repositorio`() = runBlocking {
+        val fakeDao = FakeAppDao()
+        val repo = CardRepository(fakeDao)
+
+        val cardId = fakeDao.insertCard(CreditCardEntity(id = 1, name = "Black", lastFourDigits = "9999", totalLimit = 1000000L, closingDay = 5, dueDay = 15, defaultHolderId = 1))
+        val holderId = fakeDao.insertHolder(HolderEntity(id = 1, name = "Carlos", whatsapp = "11999999999", email = "c@test.com", subLimit = 500000L))
+
+        val now = System.currentTimeMillis()
+        val thirtyDaysAgo = now - java.util.concurrent.TimeUnit.DAYS.toMillis(30)
+
+        fakeDao.insertTransaction(TransactionEntity(id = 101, cardId = cardId, holderId = holderId, merchant = "CHATGPT PLUS", totalAmount = 10000L, purchaseTimestamp = thirtyDaysAgo))
+        fakeDao.insertTransaction(TransactionEntity(id = 102, cardId = cardId, holderId = holderId, merchant = "CHATGPT PLUS", totalAmount = 11000L, purchaseTimestamp = now))
+
+        repo.syncRecurringCharges()
+
+        val recurring = fakeDao.getAllRecurringChargesSnapshot()
+        assertEquals(1, recurring.size)
+        val chatGpt = recurring.first()
+        assertEquals("CHATGPT PLUS", chatGpt.merchant)
+        assertEquals(11000L, chatGpt.lastAmount)
+        assertEquals(10000L, chatGpt.previousAmount)
+        assertTrue(chatGpt.isActive)
+
+        // Pausar assinatura
+        repo.setRecurringChargeActive(chatGpt.id, false)
+        val updated = fakeDao.getAllRecurringChargesSnapshot().first()
+        assertFalse(updated.isActive)
+
+        // Reativar
+        repo.setRecurringChargeActive(chatGpt.id, true)
+        val reactivated = fakeDao.getAllRecurringChargesSnapshot().first()
+        assertTrue(reactivated.isActive)
     }
 }

@@ -291,5 +291,50 @@ class BankNotificationProcessorTest {
             installments.filter { it.holderId == holderId }.sumOf { it.amount }
         override suspend fun getTotalHistoricalPaidByHolder(holderId: Long): Long =
             payments.filter { it.holderId == holderId }.sumOf { it.amountPaid }
+
+        val recurringCharges = mutableListOf<com.cardcontrol.app.data.local.RecurringChargeEntity>()
+
+        override suspend fun insertRecurringCharge(charge: com.cardcontrol.app.data.local.RecurringChargeEntity): Long {
+            recurringCharges.removeAll { it.merchant.equals(charge.merchant, ignoreCase = true) && it.cardId == charge.cardId }
+            val newId = if (charge.id == 0L) (recurringCharges.size + 1).toLong() else charge.id
+            val toAdd = charge.copy(id = newId)
+            recurringCharges += toAdd
+            return newId
+        }
+
+        override fun observeActiveRecurringCharges(): Flow<List<com.cardcontrol.app.data.local.RecurringChargeEntity>> =
+            flowOf(recurringCharges.filter { it.isActive })
+
+        override fun observeAllRecurringCharges(): Flow<List<com.cardcontrol.app.data.local.RecurringChargeEntity>> =
+            flowOf(recurringCharges.toList())
+
+        override suspend fun getAllRecurringChargesSnapshot(): List<com.cardcontrol.app.data.local.RecurringChargeEntity> =
+            recurringCharges.toList()
+
+        override suspend fun getRecurringChargeByMerchantAndCard(merchant: String, cardId: Long): com.cardcontrol.app.data.local.RecurringChargeEntity? =
+            recurringCharges.firstOrNull { it.merchant.equals(merchant, ignoreCase = true) && it.cardId == cardId }
+
+        override suspend fun setRecurringChargeActive(id: Long, isActive: Boolean) {
+            val idx = recurringCharges.indexOfFirst { it.id == id }
+            if (idx != -1) {
+                recurringCharges[idx] = recurringCharges[idx].copy(isActive = isActive)
+            }
+        }
+
+        override suspend fun setTransactionRecurring(transactionId: Long, isRecurring: Boolean) {
+            val idx = transactions.indexOfFirst { it.id == transactionId }
+            if (idx != -1) {
+                transactions[idx] = transactions[idx].copy(isRecurring = isRecurring)
+            }
+        }
+
+        override suspend fun getTransactionsByMerchant(merchant: String): List<TransactionEntity> =
+            transactions.filter { it.merchant.equals(merchant, ignoreCase = true) }.sortedBy { it.purchaseTimestamp }
+
+        override suspend fun getAllTransactionsSnapshot(): List<TransactionEntity> =
+            transactions.toList().sortedBy { it.purchaseTimestamp }
+
+        override suspend fun getTotalActiveRecurringAmount(): Long =
+            recurringCharges.filter { it.isActive }.sumOf { it.expectedAmount }
     }
 }

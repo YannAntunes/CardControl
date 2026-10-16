@@ -72,3 +72,11 @@ tasks:
     owner: "Core Data"
     dependencies: ["TASK-001"]
     verification: "Deterministic export and import verification test"
+
+  - id: "TASK-012"
+    title: "Detector de Assinaturas e Gastos Recorrentes (Subscription & Recurring Tracker)"
+    status: "COMPLETED"
+    owner: "Core Data / Domain / UI"
+    dependencies: ["TASK-001", "TASK-004", "TASK-010"]
+    verification: "Room v4->v5 migration (MIGRATION_4_5), SubscriptionTrackerTest (78 tests PASS), RoomV4ToV5MigrationTest, LiquidGlass RecurringChargesCard, assembleDebug & lintDebug PASS"
+

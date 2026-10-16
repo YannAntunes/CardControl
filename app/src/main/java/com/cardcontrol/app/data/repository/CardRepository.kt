@@ -23,6 +23,8 @@ class CardRepository(private val dao: AppDao) {
     val cards = dao.observeCards()
     val allInstallments = dao.observeAllInstallments()
     val allPayments = dao.observeAllPayments()
+    val activeRecurringCharges = dao.observeActiveRecurringCharges()
+    val allRecurringCharges = dao.observeAllRecurringCharges()
 
     fun observeInstallmentsForMonth(month: Int, year: Int) = dao.observeInstallmentsByPeriod(month, year)
     fun observePaymentsForMonth(month: Int, year: Int) = dao.observePaymentsByPeriod(month, year)
@@ -159,23 +161,71 @@ class CardRepository(private val dao: AppDao) {
             dedupHash = dedupHash
         )
 
-        return@withLock dao.insertTransactionWithInstallments(tx) { txId ->
-            amounts.mapIndexed { index, parcelAmount ->
-                val targetDate = startYearMonth.plusMonths(index.toLong())
-                InstallmentEntity(
-                    transactionId = txId,
-                    holderId = holderId,
-                    cardId = cardId,
-                    merchantSnapshot = safeMerchant,
-                    installmentNumber = index + 1,
-                    totalInstallments = safeInstallments,
-                    amount = parcelAmount,
-                    refMonth = targetDate.monthValue,
-                    refYear = targetDate.year,
-                    purchaseTimestamp = purchaseTimestamp
+            val finalTxId = dao.insertTransactionWithInstallments(tx) { txId ->
+                amounts.mapIndexed { index, parcelAmount ->
+                    val targetDate = startYearMonth.plusMonths(index.toLong())
+                    InstallmentEntity(
+                        transactionId = txId,
+                        holderId = holderId,
+                        cardId = cardId,
+                        merchantSnapshot = safeMerchant,
+                        installmentNumber = index + 1,
+                        totalInstallments = safeInstallments,
+                        amount = parcelAmount,
+                        refMonth = targetDate.monthValue,
+                        refYear = targetDate.year,
+                        purchaseTimestamp = purchaseTimestamp
+                    )
+                }
+            }
+            // Sincroniza assinaturas e custos recorrentes após nova transação
+            syncRecurringCharges()
+            finalTxId
+        }
+
+    suspend fun syncRecurringCharges() {
+        val txs = dao.getAllTransactionsSnapshot()
+        val detected = com.cardcontrol.app.util.SubscriptionTracker.detectSubscriptions(txs)
+        for (item in detected) {
+            val existing = dao.getRecurringChargeByMerchantAndCard(item.merchant, item.cardId)
+            if (existing != null) {
+                dao.insertRecurringCharge(
+                    existing.copy(
+                        holderId = item.holderId,
+                        expectedAmount = item.expectedAmount,
+                        lastAmount = item.lastAmount,
+                        previousAmount = item.previousAmount,
+                        billingCycleDays = item.billingCycleDays,
+                        lastChargedTimestamp = item.lastChargedTimestamp,
+                        isUserConfirmed = existing.isUserConfirmed || item.isUserConfirmed
+                    )
+                )
+            } else {
+                dao.insertRecurringCharge(
+                    RecurringChargeEntity(
+                        cardId = item.cardId,
+                        holderId = item.holderId,
+                        merchant = item.merchant,
+                        expectedAmount = item.expectedAmount,
+                        lastAmount = item.lastAmount,
+                        previousAmount = item.previousAmount,
+                        billingCycleDays = item.billingCycleDays,
+                        lastChargedTimestamp = item.lastChargedTimestamp,
+                        isActive = true,
+                        isUserConfirmed = item.isUserConfirmed
+                    )
                 )
             }
         }
+    }
+
+    suspend fun setRecurringChargeActive(id: Long, isActive: Boolean) {
+        dao.setRecurringChargeActive(id, isActive)
+    }
+
+    suspend fun markTransactionRecurring(transactionId: Long, isRecurring: Boolean) {
+        dao.setTransactionRecurring(transactionId, isRecurring)
+        syncRecurringCharges()
     }
 
     suspend fun registerPayment(

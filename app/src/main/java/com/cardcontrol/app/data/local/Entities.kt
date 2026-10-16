@@ -56,7 +56,30 @@ data class TransactionEntity(
     val installmentsCount: Int = 1,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
     val isAutoCaptured: Boolean = false,
-    val dedupHash: String = ""
+    val dedupHash: String = "",
+    val isRecurring: Boolean = false
+)
+
+@Entity(
+    tableName = "recurring_charges",
+    foreignKeys = [
+        ForeignKey(entity = CreditCardEntity::class, parentColumns = ["id"], childColumns = ["cardId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = HolderEntity::class, parentColumns = ["id"], childColumns = ["holderId"], onDelete = ForeignKey.CASCADE)
+    ],
+    indices = [Index("cardId"), Index("holderId"), Index("merchant")]
+)
+data class RecurringChargeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val cardId: Long,
+    val holderId: Long,
+    val merchant: String,
+    val expectedAmount: Long,
+    val lastAmount: Long,
+    val previousAmount: Long? = null,
+    val billingCycleDays: Int = 30,
+    val lastChargedTimestamp: Long = System.currentTimeMillis(),
+    val isActive: Boolean = true,
+    val isUserConfirmed: Boolean = false
 )
 
 @Entity(

@@ -1,6 +1,7 @@
 package com.cardcontrol.app.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -8,11 +9,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.draw.clip
+import com.cardcontrol.app.data.local.RecurringChargeEntity
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -236,6 +240,15 @@ fun MainScreen(
                             }
                         } else {
                             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 96.dp)) {
+                                item {
+                                    RecurringChargesCard(
+                                        recurringCharges = state.recurringCharges,
+                                        totalMonthlyRecurring = state.totalMonthlyRecurring,
+                                        limitImpactPercent = state.recurringLimitImpactPercent,
+                                        priceCreepAlertCount = state.priceCreepAlertCount,
+                                        onToggleActive = { id, active -> viewModel.setRecurringChargeActive(id, active) }
+                                    )
+                                }
                                 items(state.holderSummaries, key = { it.holder.id }) { item ->
                                     val isExpanded = expandedHolderId == item.holder.id
                                     val usageRatio = if (item.holder.subLimit > 0L) (item.globalCommitted.toFloat() / item.holder.subLimit.toFloat()) else 0f
@@ -294,9 +307,30 @@ fun MainScreen(
                                                         Text("Nenhuma parcela neste mês.", style = MaterialTheme.typography.bodySmall, color = GlassPalette.TextSecondary)
                                                     } else {
                                                         item.monthlyInstallments.forEach { inst ->
-                                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                                 Text("• ${inst.merchantSnapshot} (${inst.installmentNumber}/${inst.totalInstallments})", style = MaterialTheme.typography.bodySmall, color = GlassPalette.TextPrimary)
-                                                                 Text(ReportEngine.formatCurrency(inst.amount), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = GlassPalette.CyanGlow)
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Row(
+                                                                    verticalAlignment = Alignment.CenterVertically,
+                                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                                    modifier = Modifier.weight(1f, fill = false)
+                                                                ) {
+                                                                    IconButton(
+                                                                        onClick = { viewModel.markTransactionRecurring(inst.transactionId, true) },
+                                                                        modifier = Modifier.size(24.dp)
+                                                                    ) {
+                                                                        Icon(
+                                                                            Icons.Default.Repeat,
+                                                                            contentDescription = "Confirmar como Recorrente",
+                                                                            tint = GlassPalette.CyanGlow.copy(alpha = 0.75f),
+                                                                            modifier = Modifier.size(16.dp)
+                                                                        )
+                                                                    }
+                                                                    Text("• ${inst.merchantSnapshot} (${inst.installmentNumber}/${inst.totalInstallments})", style = MaterialTheme.typography.bodySmall, color = GlassPalette.TextPrimary)
+                                                                }
+                                                                Text(ReportEngine.formatCurrency(inst.amount), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = GlassPalette.CyanGlow)
                                                             }
                                                         }
                                                     }
@@ -778,5 +812,208 @@ fun MainScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun RecurringChargesCard(
+    recurringCharges: List<RecurringChargeEntity>,
+    totalMonthlyRecurring: Long,
+    limitImpactPercent: Double,
+    priceCreepAlertCount: Int,
+    onToggleActive: (Long, Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isExpanded by remember { mutableStateOf(true) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .liquidGlassSurface(
+                cornerRadius = 20.dp,
+                accentTint = if (priceCreepAlertCount > 0) GlassPalette.AmberWarn else GlassPalette.IndigoGlow
+            )
+            .padding(16.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Autorenew,
+                        contentDescription = null,
+                        tint = if (priceCreepAlertCount > 0) GlassPalette.AmberWarn else GlassPalette.IndigoGlow,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "Assinaturas & Recorrências",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = GlassPalette.TextPrimary
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (priceCreepAlertCount > 0) {
+                        Surface(
+                            shape = CircleShape,
+                            color = GlassPalette.AmberWarn.copy(alpha = 0.2f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, GlassPalette.AmberWarn.copy(alpha = 0.6f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.TrendingUp,
+                                    contentDescription = "Alerta de aumento",
+                                    tint = GlassPalette.AmberWarn,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    "$priceCreepAlertCount alta",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = GlassPalette.AmberWarn
+                                )
+                            }
+                        }
+                    }
+
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isExpanded) "Recolher" else "Expandir",
+                        tint = GlassPalette.TextSecondary
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column {
+                    Text(
+                        "Comprometimento Mensal",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GlassPalette.TextSecondary
+                    )
+                    Text(
+                        ReportEngine.formatCurrency(totalMonthlyRecurring),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = GlassPalette.TextPrimary
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        "Impacto no Limite",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GlassPalette.TextSecondary
+                    )
+                    Text(
+                        String.format(java.util.Locale.US, "%.1f%%", limitImpactPercent),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (limitImpactPercent > 30.0) GlassPalette.AmberWarn else GlassPalette.CyanGlow
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                    if (recurringCharges.isEmpty()) {
+                        Text(
+                            "Nenhuma assinatura detectada ainda. Compras recorrentes a cada ~30 dias serão identificadas automaticamente.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = GlassPalette.TextSecondary
+                        )
+                    } else {
+                        recurringCharges.forEach { charge ->
+                            val hasCreep = charge.previousAmount != null && charge.lastAmount > charge.previousAmount
+                            val delta = if (hasCreep) charge.lastAmount - charge.previousAmount!! else 0L
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.04f))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            charge.merchant,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (charge.isActive) GlassPalette.TextPrimary else GlassPalette.TextSecondary.copy(alpha = 0.6f)
+                                        )
+                                        if (hasCreep && charge.isActive) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = GlassPalette.CoralDanger.copy(alpha = 0.2f),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, GlassPalette.CoralDanger.copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    "+${ReportEngine.formatCurrency(delta)}",
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = GlassPalette.CoralDanger
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        "Ciclo ~${charge.billingCycleDays} dias • ${if (charge.isActive) "Ativa" else "Pausada"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = GlassPalette.TextSecondary
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        ReportEngine.formatCurrency(charge.lastAmount),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (charge.isActive) GlassPalette.CyanGlow else GlassPalette.TextSecondary.copy(alpha = 0.5f)
+                                    )
+                                    Switch(
+                                        checked = charge.isActive,
+                                        onCheckedChange = { active -> onToggleActive(charge.id, active) },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = GlassPalette.CyanGlow,
+                                            checkedTrackColor = GlassPalette.IndigoGlow.copy(alpha = 0.5f),
+                                            uncheckedThumbColor = GlassPalette.TextSecondary,
+                                            uncheckedTrackColor = Color.White.copy(alpha = 0.1f)
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

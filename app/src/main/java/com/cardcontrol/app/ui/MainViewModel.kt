@@ -35,7 +35,11 @@ data class DashboardUiState(
     val holderSummaries: List<HolderSummaryUi> = emptyList(),
     val cardSummaries: List<CardSummaryUi> = emptyList(),
     val totalMonthInvoice: Long = 0L,
-    val totalMonthPaid: Long = 0L
+    val totalMonthPaid: Long = 0L,
+    val recurringCharges: List<RecurringChargeEntity> = emptyList(),
+    val totalMonthlyRecurring: Long = 0L,
+    val recurringLimitImpactPercent: Double = 0.0,
+    val priceCreepAlertCount: Int = 0
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -43,6 +47,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getInstance(application).appDao()
     private val repository = CardRepository(dao)
     val credentialStore = CredentialStore(application)
+
+    init {
+        viewModelScope.launch {
+            repository.syncRecurringCharges()
+        }
+    }
 
     private val selectedPeriod = MutableStateFlow(LocalDate.now().withDayOfMonth(1))
 
@@ -61,7 +71,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         periodInstallments,
         periodPayments,
         repository.allInstallments,
-        repository.allPayments
+        repository.allPayments,
+        repository.allRecurringCharges
     ) { args: Array<Any?> ->
         val date = args[0] as LocalDate
         @Suppress("UNCHECKED_CAST")
@@ -76,6 +87,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val allInst = args[5] as List<InstallmentEntity>
         @Suppress("UNCHECKED_CAST")
         val allPay = args[6] as List<PaymentEntity>
+        @Suppress("UNCHECKED_CAST")
+        val recurring = args[7] as List<RecurringChargeEntity>
 
         val holderSummaries = holders.map { h ->
             val hMonthInst = monthInst.filter { it.holderId == h.id }
@@ -107,6 +120,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
+        val activeRecurring = recurring.filter { it.isActive }
+        val totalRecurring = com.cardcontrol.app.util.SubscriptionTracker.calculateCommittedFixedCosts(activeRecurring)
+        val totalCardsLimit = cards.sumOf { it.totalLimit }
+        val limitImpactPercent = com.cardcontrol.app.util.SubscriptionTracker.calculateLimitImpactPercent(totalRecurring, totalCardsLimit)
+        val creepAlerts = activeRecurring.count { it.previousAmount != null && it.lastAmount > it.previousAmount }
+
         DashboardUiState(
             selectedMonth = date.monthValue,
             selectedYear = date.year,
@@ -115,7 +134,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             holderSummaries = holderSummaries,
             cardSummaries = cardSummaries,
             totalMonthInvoice = monthInst.sumOf { it.amount },
-            totalMonthPaid = monthPay.sumOf { it.amountPaid }
+            totalMonthPaid = monthPay.sumOf { it.amountPaid },
+            recurringCharges = recurring,
+            totalMonthlyRecurring = totalRecurring,
+            recurringLimitImpactPercent = limitImpactPercent,
+            priceCreepAlertCount = creepAlerts
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 
@@ -132,5 +155,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addPayment(holderId: Long, cardId: Long?, amount: Long, notes: String) {
         val period = selectedPeriod.value
         viewModelScope.launch { repository.registerPayment(holderId, cardId, amount, period.monthValue, period.year, notes) }
+    }
+    fun setRecurringChargeActive(id: Long, isActive: Boolean) {
+        viewModelScope.launch { repository.setRecurringChargeActive(id, isActive) }
+    }
+    fun markTransactionRecurring(transactionId: Long, isRecurring: Boolean) {
+        viewModelScope.launch { repository.markTransactionRecurring(transactionId, isRecurring) }
     }
 }

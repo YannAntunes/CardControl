@@ -13,9 +13,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CreditCardEntity::class,
         TransactionEntity::class,
         InstallmentEntity::class,
-        PaymentEntity::class
+        PaymentEntity::class,
+        RecurringChargeEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -72,13 +73,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adiciona suporte ao detector de assinaturas e despesas recorrentes sem perda de dados. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `isRecurring` INTEGER NOT NULL DEFAULT 0")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `recurring_charges` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `cardId` INTEGER NOT NULL,
+                        `holderId` INTEGER NOT NULL,
+                        `merchant` TEXT NOT NULL,
+                        `expectedAmount` INTEGER NOT NULL,
+                        `lastAmount` INTEGER NOT NULL,
+                        `previousAmount` INTEGER,
+                        `billingCycleDays` INTEGER NOT NULL,
+                        `lastChargedTimestamp` INTEGER NOT NULL,
+                        `isActive` INTEGER NOT NULL,
+                        `isUserConfirmed` INTEGER NOT NULL,
+                        FOREIGN KEY(`cardId`) REFERENCES `credit_cards`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`holderId`) REFERENCES `holders`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recurring_charges_cardId` ON `recurring_charges` (`cardId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recurring_charges_holderId` ON `recurring_charges` (`holderId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recurring_charges_merchant` ON `recurring_charges` (`merchant`)")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "card_control_offline.db"
-                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4).build()
+                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
                 INSTANCE = instance
                 instance
             }
